@@ -1,0 +1,108 @@
+{{- if .Values.scylla.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-scylla
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "scylla") | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - name: intra
+      port: {{ .Values.scylla.service.ports.intra }}
+      targetPort: {{ .Values.scylla.service.ports.intra }}
+    - name: cql
+      port: {{ .Values.scylla.service.ports.cql }}
+      targetPort: {{ .Values.scylla.service.ports.cql }}
+    - name: jmx
+      port: {{ .Values.scylla.service.ports.jmx }}
+      targetPort: {{ .Values.scylla.service.ports.jmx }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "scylla") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "gochat.fullname" . }}-scylla
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "scylla") | nindent 4 }}
+spec:
+  serviceName: {{ include "gochat.fullname" . }}-scylla
+  replicas: {{ .Values.scylla.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "scylla") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "scylla") | nindent 8 }}
+    spec:
+      containers:
+        - name: scylla
+          image: "{{ .Values.scylla.image.repository }}:{{ .Values.scylla.image.tag }}"
+          imagePullPolicy: {{ .Values.scylla.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.scylla.service.ports.intra }}
+              name: intra
+            - containerPort: {{ .Values.scylla.service.ports.cql }}
+              name: cql
+            - containerPort: {{ .Values.scylla.service.ports.jmx }}
+              name: jmx
+          env:
+            - name: SCYLLA_DEVELOPER_MODE
+              value: "{{ ternary "1" "0" .Values.scylla.developerMode }}"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/scylla
+          {{- if .Values.scylla.lifecycle.createKeyspace.enabled }}
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    until cqlsh -e "DESCRIBE KEYSPACES" >/dev/null 2>&1; do
+                      echo "Waiting for Scylla to become available..."
+                      sleep 5
+                    done
+                    cqlsh -e "CREATE KEYSPACE IF NOT EXISTS {{ .Values.scylla.lifecycle.createKeyspace.keyspace }} WITH replication = {'class': '{{ .Values.scylla.lifecycle.createKeyspace.replicationClass }}', 'replication_factor': {{ .Values.scylla.lifecycle.createKeyspace.replicationFactor }} };"
+          {{- end }}
+          resources:
+            {{- toYaml .Values.scylla.resources | nindent 12 }}
+      {{- if not .Values.scylla.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scylla.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scylla.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scylla.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.scylla.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.scylla.persistence.accessModes | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.scylla.persistence.size }}
+        {{- if .Values.scylla.persistence.storageClass }}
+        storageClassName: {{ .Values.scylla.persistence.storageClass }}
+        {{- end }}
+  {{- end }}
+{{- end }}

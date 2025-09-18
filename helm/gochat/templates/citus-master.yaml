@@ -1,0 +1,89 @@
+{{- if .Values.citus.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-citus-master
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "citus-master") | nindent 4 }}
+spec:
+  type: {{ .Values.citus.master.service.type | default "ClusterIP" }}
+  ports:
+    - name: postgres
+      port: {{ .Values.citus.master.service.port }}
+      targetPort: {{ .Values.citus.master.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "citus-master") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "gochat.fullname" . }}-citus-master
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "citus-master") | nindent 4 }}
+spec:
+  serviceName: {{ include "gochat.fullname" . }}-citus-master
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "citus-master") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "citus-master") | nindent 8 }}
+    spec:
+      containers:
+        - name: master
+          image: "{{ .Values.citus.image.repository }}:{{ .Values.citus.image.tag }}"
+          imagePullPolicy: {{ .Values.citus.image.pullPolicy }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.citus.auth.postgresUser | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.citus.auth.postgresPassword | quote }}
+            - name: PGUSER
+              value: {{ .Values.citus.auth.postgresUser | quote }}
+            - name: PGPASSWORD
+              value: {{ .Values.citus.auth.postgresPassword | quote }}
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: {{ .Values.citus.auth.hostAuthMethod | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.citus.auth.postgresDb | quote }}
+          ports:
+            - containerPort: {{ .Values.citus.master.service.port }}
+              name: postgres
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            {{- toYaml .Values.citus.master.resources | nindent 12 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.citus.master.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.citus.master.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.citus.master.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.citus.master.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.citus.master.persistence.accessModes | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.citus.master.persistence.size }}
+        {{- if .Values.citus.master.persistence.storageClass }}
+        storageClassName: {{ .Values.citus.master.persistence.storageClass }}
+        {{- end }}
+  {{- end }}
+{{- end }}

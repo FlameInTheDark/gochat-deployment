@@ -1,0 +1,58 @@
+{{- if .Values.keydb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-keydb
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "keydb") | nindent 4 }}
+spec:
+  type: {{ .Values.keydb.service.type }}
+  ports:
+    - name: client
+      port: {{ .Values.keydb.service.port }}
+      targetPort: {{ .Values.keydb.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "keydb") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-keydb
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "keydb") | nindent 4 }}
+spec:
+  replicas: {{ .Values.keydb.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "keydb") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "keydb") | nindent 8 }}
+    spec:
+      containers:
+        - name: keydb
+          image: "{{ .Values.keydb.image.repository }}:{{ .Values.keydb.image.tag }}"
+          imagePullPolicy: {{ .Values.keydb.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.keydb.service.port }}
+              name: client
+          resources:
+            {{- toYaml .Values.keydb.resources | nindent 12 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.keydb.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.keydb.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.keydb.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

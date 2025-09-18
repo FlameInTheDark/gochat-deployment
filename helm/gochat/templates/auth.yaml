@@ -1,0 +1,76 @@
+{{- if .Values.auth.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-auth
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "auth") | nindent 4 }}
+spec:
+  type: {{ .Values.auth.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.auth.service.port }}
+      targetPort: {{ .Values.auth.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "auth") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-auth
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "auth") | nindent 4 }}
+spec:
+  replicas: {{ .Values.auth.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "auth") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "auth") | nindent 8 }}
+    spec:
+      containers:
+        - name: auth
+          image: "{{ .Values.auth.image.repository }}:{{ default .Values.global.imageVariant .Values.auth.image.tag }}"
+          imagePullPolicy: {{ .Values.auth.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.auth.service.port }}
+              name: http
+{{- if .Values.auth.env }}
+          env:
+{{ toYaml .Values.auth.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /dist/config.yaml
+              subPath: config.yaml
+            - name: config
+              mountPath: /dist/email_notify.tmpl
+              subPath: email_notify.tmpl
+            - name: config
+              mountPath: /dist/password_reset.tmpl
+              subPath: password_reset.tmpl
+          resources:
+            {{- toYaml .Values.auth.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-auth-config
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.auth.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.auth.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.auth.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
