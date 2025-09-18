@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: ws
-          image: "{{ .Values.ws.image.repository }}:{{ .Values.ws.image.tag }}"
+          image: "{{ .Values.ws.image.repository }}:{{ default .Values.global.imageVariant .Values.ws.image.tag }}"
           imagePullPolicy: {{ .Values.ws.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.ws.service.port }}

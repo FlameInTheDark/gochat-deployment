@@ -19,11 +19,12 @@ This repository contains infrastructure assets for running the GoChat stack eith
    ```
    Update the copied files and adjust the volume mounts inside `compose/docker-compose.yaml` if you want Docker to use the customised versions. The committed files contain default values that allow the stack to boot without additional changes.
 2. Review the Traefik labels in the compose file and update domain names or paths to match your environment.
-3. Start the stack:
+3. (Optional) Choose which GoChat application images to deploy by setting `GOCHAT_IMAGE_VARIANT` to either `latest` (default) or `dev` before running Compose.
+4. Start the stack:
    ```bash
    docker compose -f compose/docker-compose.yaml up -d
    ```
-4. Stop everything when finished:
+5. Stop everything when finished:
    ```bash
    docker compose -f compose/docker-compose.yaml down
    ```
@@ -58,6 +59,7 @@ The Helm chart deploys the same set of services as Docker Compose: ScyllaDB, NAT
 - **Config maps** – API, auth, websocket and indexer services load their YAML configuration from config maps rendered from the values file. Update the relevant `config` blocks to match your infrastructure.
 - **Persistent storage** – Scylla, OpenSearch and Citus master use persistent volume claims by default. Storage class names and sizes are configurable via the `persistence` sections.
 - **Optional components** – Disable services by toggling the `enabled` flag under their respective section. For example, set `traefik.enabled=false` if you already run an ingress controller. Enable Citus workers by setting `citus.worker.enabled=true` and adjusting `replicaCount`.
+- **Image variants** – Set `global.imageVariant` to `latest` (default) or `dev` to control which tag the API, auth, websocket, indexer and UI deployments use. Individual services can still override the `image.tag` field if necessary.
 - **Ingress** – The chart ships with an optional generic ingress definition. Populate the `ingress` block to expose the UI, API or websocket routes through your ingress controller.
 
 Refer to the comments in `helm/gochat/values.yaml` for all available knobs.

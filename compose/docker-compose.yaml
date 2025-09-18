@@ -39,7 +39,7 @@ services:
     restart: always
 
   auth:
-    image: ghcr.io/flameinthedark/gochat-auth:latest
+    image: ghcr.io/flameinthedark/gochat-auth:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
       - ./config/auth_config.yaml:/dist/config.yaml
@@ -61,7 +61,7 @@ services:
       - default
 
   ui:
-    image: ghcr.io/flameinthedark/gochatui:latest
+    image: ghcr.io/flameinthedark/gochatui:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     labels:
       - "traefik.enable=true"
@@ -80,7 +80,7 @@ services:
       - default
 
   api:
-    image: ghcr.io/flameinthedark/gochat-api:latest
+    image: ghcr.io/flameinthedark/gochat-api:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
       - ./config/api_config.yaml:/dist/config.yaml
@@ -104,7 +104,7 @@ services:
       - default
 
   ws:
-    image: ghcr.io/flameinthedark/gochat-ws:latest
+    image: ghcr.io/flameinthedark/gochat-ws:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
       - ./config/ws_config.yaml:/dist/config.yaml
@@ -125,7 +125,7 @@ services:
       - default
 
   indexer:
-    image: ghcr.io/flameinthedark/gochat-indexer:latest
+    image: ghcr.io/flameinthedark/gochat-indexer:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
       - ./config/indexer_config.yaml:/dist/config.yaml

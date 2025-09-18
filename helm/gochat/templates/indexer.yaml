@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: indexer
-          image: "{{ .Values.indexer.image.repository }}:{{ .Values.indexer.image.tag }}"
+          image: "{{ .Values.indexer.image.repository }}:{{ default .Values.global.imageVariant .Values.indexer.image.tag }}"
           imagePullPolicy: {{ .Values.indexer.image.pullPolicy }}
 {{- if .Values.indexer.env }}
           env:

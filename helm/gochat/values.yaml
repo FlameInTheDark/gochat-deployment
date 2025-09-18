@@ -1,6 +1,9 @@
 nameOverride: ""
 fullnameOverride: ""
 
+global:
+  imageVariant: latest
+
 imagePullSecrets: []
 
 scylla:
@@ -90,7 +93,7 @@ auth:
   replicaCount: 1
   image:
     repository: ghcr.io/flameinthedark/gochat-auth
-    tag: latest
+    tag: "" # Overrides global.imageVariant when set
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -307,7 +310,7 @@ api:
   replicaCount: 1
   image:
     repository: ghcr.io/flameinthedark/gochat-api
-    tag: latest
+    tag: "" # Overrides global.imageVariant when set
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -361,7 +364,7 @@ ws:
   replicaCount: 1
   image:
     repository: ghcr.io/flameinthedark/gochat-ws
-    tag: latest
+    tag: "" # Overrides global.imageVariant when set
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -387,7 +390,7 @@ indexer:
   replicaCount: 1
   image:
     repository: ghcr.io/flameinthedark/gochat-indexer
-    tag: latest
+    tag: "" # Overrides global.imageVariant when set
     pullPolicy: IfNotPresent
   env: []
   config: |
@@ -409,7 +412,7 @@ ui:
   replicaCount: 1
   image:
     repository: ghcr.io/flameinthedark/gochatui
-    tag: latest
+    tag: "" # Overrides global.imageVariant when set
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
