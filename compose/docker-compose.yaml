@@ -84,6 +84,8 @@ services:
   landing:
     image: ghcr.io/flameinthedark/${GOCHAT_LANDING_IMAGE:-gochatui-landing}:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
+    profiles:
+      - landing
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.landing.rule=PathPrefix(`/`)"

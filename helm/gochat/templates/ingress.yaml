@@ -20,6 +20,7 @@ spec:
       http:
         paths:
 {{- range .paths }}
+{{- if or (ne .service "landing") $root.Values.landing.enabled }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
             backend:
@@ -27,6 +28,7 @@ spec:
                 name: {{ printf "%s-%s" (include "gochat.fullname" $root) .service }}
                 port:
                   number: {{ .port }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if .Values.ingress.tls }}

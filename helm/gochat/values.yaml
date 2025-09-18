@@ -426,7 +426,7 @@ ui:
   affinity: {}
 
 landing:
-  enabled: true
+  enabled: false
   replicaCount: 1
   image:
     repository: ghcr.io/flameinthedark/gochatui-landing
