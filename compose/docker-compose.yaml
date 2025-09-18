@@ -145,9 +145,10 @@ services:
     environment:
       PG_ADDRESS: ${PG_ADDRESS:-postgres://postgres@citus-master:5432/gochat?sslmode=disable}
       CASSANDRA_ADDRESS: ${CASSANDRA_ADDRESS:-cassandra://scylla:9042/gochat?x-multi-statement=true}
+      GOCHAT_MIGRATIONS_REPO: ${GOCHAT_MIGRATIONS_REPO:-https://github.com/FlameInTheDark/gochat.git}
+      GOCHAT_MIGRATIONS_BRANCH: ${GOCHAT_MIGRATIONS_BRANCH:-main}
     volumes:
-      - ./db:/migrations:ro
-      - ./compose/init/run-migrations.sh:/scripts/run-migrations.sh:ro
+      - ./helm/gochat/files/scripts/run-migrations.sh:/scripts/run-migrations.sh:ro
     depends_on:
       scylla:
         condition: service_healthy

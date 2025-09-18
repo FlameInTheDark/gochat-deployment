@@ -433,6 +433,8 @@ migrations:
     pullPolicy: IfNotPresent
   pgAddress: ""
   cassandraAddress: ""
+  repo: https://github.com/FlameInTheDark/gochat.git
+  branch: main
   backoffLimit: 5
   resources: {}
   nodeSelector: {}

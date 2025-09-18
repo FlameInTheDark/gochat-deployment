@@ -39,12 +39,14 @@ spec:
               value: {{ default $defaultPg .Values.migrations.pgAddress | quote }}
             - name: CASSANDRA_ADDRESS
               value: {{ default $defaultCassandra .Values.migrations.cassandraAddress | quote }}
+            - name: GOCHAT_MIGRATIONS_REPO
+              value: {{ .Values.migrations.repo | quote }}
+            - name: GOCHAT_MIGRATIONS_BRANCH
+              value: {{ .Values.migrations.branch | quote }}
           volumeMounts:
             - name: migrate-script
               mountPath: /scripts/run-migrations.sh
               subPath: run-migrations.sh
-            - name: migrations
-              mountPath: /migrations
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
       volumes:
@@ -52,9 +54,6 @@ spec:
           configMap:
             name: {{ include "gochat.fullname" . }}-migration-script
             defaultMode: 0555
-        - name: migrations
-          configMap:
-            name: {{ include "gochat.fullname" . }}-migrations
       {{- with .Values.migrations.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

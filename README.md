@@ -5,8 +5,8 @@ This repository contains infrastructure assets for running the GoChat stack eith
 ## Repository layout
 
 - `compose/` – Docker Compose manifests, default configuration files, bootstrap scripts and templates.
-- `db/` – Database migration files for PostgreSQL and ScyllaDB that are applied automatically during deployments.
 - `helm/gochat/` – A Helm chart that deploys the complete GoChat stack on Kubernetes.
+- `helm/gochat/files/scripts/run-migrations.sh` – Helper script executed by the Compose and Helm migrations jobs.
 - `README.md` – This guide.
 
 ## Docker Compose usage
@@ -33,7 +33,7 @@ This repository contains infrastructure assets for running the GoChat stack eith
 The compose bundle also includes:
 
 - `compose/init/init-scylladb.sh` which guarantees the `gochat` keyspace exists when Scylla boots.
-- Automatic PostgreSQL and Scylla migrations through the `migrations` one-shot service. Override `PG_ADDRESS` and `CASSANDRA_ADDRESS` if you need to point at external databases.
+- Automatic PostgreSQL and Scylla migrations through the `migrations` one-shot service. Override `PG_ADDRESS`, `CASSANDRA_ADDRESS`, `GOCHAT_MIGRATIONS_REPO` or `GOCHAT_MIGRATIONS_BRANCH` to target external databases or a different revision of the upstream repository.
 - Email templates under `compose/templates/` used by the auth service.
 
 ## Helm chart
@@ -59,7 +59,7 @@ The Helm chart deploys the same set of services as Docker Compose: ScyllaDB, NAT
 ### Configuration highlights
 
 - **Config maps** – API, auth, websocket and indexer services load their YAML configuration from config maps rendered from the values file. Update the relevant `config` blocks to match your infrastructure.
-- **Migrations job** – A Helm hook spins up a transient job that runs both PostgreSQL and Scylla migrations on install/upgrade. Adjust the `migrations` block in `values.yaml` to point at custom database endpoints if required.
+- **Migrations job** – A Helm hook spins up a transient job that runs both PostgreSQL and Scylla migrations on install/upgrade. Adjust the `migrations` block in `values.yaml` to point at custom database endpoints or a different repository/branch for fetching the latest migration files.
 - **Persistent storage** – Scylla, OpenSearch and Citus master use persistent volume claims by default. Storage class names and sizes are configurable via the `persistence` sections.
 - **Optional components** – Disable services by toggling the `enabled` flag under their respective section. For example, set `traefik.enabled=false` if you already run an ingress controller. Enable Citus workers by setting `citus.worker.enabled=true` and adjusting `replicaCount`.
 - **Image variants** – Set `global.imageVariant` to `latest` (default) or `dev` to control which tag the API, auth, websocket, indexer and UI deployments use. Individual services can still override the `image.tag` field if necessary.
