@@ -60,6 +60,25 @@ services:
       - traefik
       - default
 
+  ui:
+    image: ghcr.io/flameinthedark/gochatui:latest
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ui.rule=PathPrefix(`/app`)"
+      - "traefik.http.routers.ui.middlewares=ws-stripprefix"
+      - "traefik.http.middlewares.ui-stripprefix.stripprefix.prefixes=/app"
+      - "traefik.http.middlewares.ui-stripprefix.stripprefix.forceslash=true"
+      - "traefik.http.routers.ui.service=ui"
+      - "traefik.http.services.ui.loadbalancer.server.port=80"
+      - "traefik.docker.network=gochat_traefik"
+    environment:
+      PUBLIC_WS_URL: "${PUBLIC_WS_URL:-https://example.com}"
+      PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL:-https://example.com}"
+    networks:
+      - traefik
+      - default
+
   api:
     image: ghcr.io/flameinthedark/gochat-api:latest
     restart: always
