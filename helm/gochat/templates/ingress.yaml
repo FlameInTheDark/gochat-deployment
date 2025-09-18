@@ -6,9 +6,21 @@ metadata:
   name: {{ include "gochat.fullname" . }}
   labels:
     {{- include "gochat.labels" . | nindent 4 }}
-{{- if .Values.ingress.annotations }}
+{{- $annotations := dict -}}
+{{- if .Values.ingress.annotations -}}
+  {{- range $key, $value := .Values.ingress.annotations }}
+    {{- $_ := set $annotations $key $value }}
+  {{- end }}
+{{- end }}
+{{- if .Values.traefik.enabled }}
+  {{- $middlewareName := printf "%s-%s" .Release.Namespace (printf "%s-ui-stripprefix" (include "gochat.fullname" .)) }}
+  {{- if not (hasKey $annotations "traefik.ingress.kubernetes.io/router.middlewares") }}
+    {{- $_ := set $annotations "traefik.ingress.kubernetes.io/router.middlewares" (printf "%s@kubernetescrd" $middlewareName) }}
+  {{- end }}
+{{- end }}
+{{- if gt (len $annotations) 0 }}
   annotations:
-    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- toYaml $annotations | nindent 4 }}
 {{- end }}
 spec:
 {{- if .Values.ingress.className }}

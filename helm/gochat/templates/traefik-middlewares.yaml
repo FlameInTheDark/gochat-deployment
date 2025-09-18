@@ -1,0 +1,14 @@
+{{- if and .Values.ingress.enabled .Values.traefik.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "gochat.fullname" . }}-ui-stripprefix
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "traefik") | nindent 4 }}
+    app.kubernetes.io/part-of: "ui"
+spec:
+  stripPrefix:
+    prefixes:
+      - /app
+    forceSlash: true
+{{- end }}
