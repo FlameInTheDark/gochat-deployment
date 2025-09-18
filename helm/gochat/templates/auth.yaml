@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: auth
-          image: "{{ .Values.auth.image.repository }}:{{ .Values.auth.image.tag }}"
+          image: "{{ .Values.auth.image.repository }}:{{ default .Values.global.imageVariant .Values.auth.image.tag }}"
           imagePullPolicy: {{ .Values.auth.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.auth.service.port }}
