@@ -1,0 +1,216 @@
+services:
+  scylla:
+    image: scylladb/scylla:6.2
+    volumes:
+      - scylla-data:/var/lib/scylla
+      - ./init/init-scylladb.sh:/init-scylladb.sh
+    ports:
+      - "7000:7000"
+      - "9042:9042"
+      - "7199:7199"
+    environment:
+      SCYLLA_DEVELOPER_MODE: "${SCYLLA_DEVELOPER_MODE:-1}"
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "SELECT now() FROM system.local;"]
+      interval: 10s
+      retries: 5
+    restart: always
+
+  nats:
+    image: nats:2.10.22-alpine3.20
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+      - "6222:6222"
+    restart: always
+
+  indexer-nats:
+    image: nats:2.10.22-alpine3.20
+    ports:
+      - "4333:4222"
+      - "8333:8222"
+      - "6333:6222"
+    restart: always
+
+  keydb:
+    image: eqalpha/keydb:alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  auth:
+    image: ghcr.io/flameinthedark/gochat-auth:latest
+    restart: always
+    volumes:
+      - ./auth_config.yaml:/dist/config.yaml
+      - ./email_notify.tmpl:/dist/email_notify.tmpl
+      - ./password_reset.tmpl:/dist/password_reset.tmpl
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`)"
+      - "traefik.http.routers.auth.service=auth"
+      - "traefik.http.services.auth.loadbalancer.server.port=3100"
+      - "traefik.docker.network=gochat_traefik"
+    depends_on:
+      keydb:
+        condition: service_started
+      citus-master:
+        condition: service_started
+    networks:
+      - traefik
+      - default
+
+  api:
+    image: ghcr.io/flameinthedark/gochat-api:latest
+    restart: always
+    volumes:
+      - ./api_config.yaml:/dist/config.yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api/v1`)"
+      - "traefik.http.routers.api.service=api"
+      - "traefik.http.services.api.loadbalancer.server.port=3100"
+      - "traefik.docker.network=gochat_traefik"
+    depends_on:
+      scylla:
+        condition: service_healthy
+      keydb:
+        condition: service_started
+      nats:
+        condition: service_started
+      auth:
+        condition: service_started
+    networks:
+      - traefik
+      - default
+
+  ws:
+    image: ghcr.io/flameinthedark/gochat-ws:latest
+    restart: always
+    volumes:
+      - ./ws_config.yaml:/dist/config.yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ws.rule=PathPrefix(`/ws`)"
+      - "traefik.http.routers.ws.middlewares=ws-stripprefix"
+      - "traefik.http.middlewares.ws-stripprefix.stripprefix.prefixes=/ws"
+      - "traefik.http.middlewares.ws-stripprefix.stripprefix.forceslash=true"
+      - "traefik.http.routers.ws.service=ws"
+      - "traefik.http.services.ws.loadbalancer.server.port=3100"
+      - "traefik.docker.network=gochat_traefik"
+    depends_on:
+      nats:
+        condition: service_started
+    networks:
+      - traefik
+      - default
+
+  indexer:
+    image: ghcr.io/flameinthedark/gochat-indexer:latest
+    restart: always
+    volumes:
+      - ./indexer_config.yaml:/dist/config.yaml
+    depends_on:
+      indexer-nats:
+        condition: service_started
+      opensearch:
+        condition: service_started
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: true
+      bootstrap.memory_lock: true
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-CustOM-Pa55w0Rd}"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.13.0
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: "${OPENSEARCH_HOSTS:-http://opensearch:9200}"
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "${DISABLE_SECURITY_DASHBOARDS_PLUGIN:-true}"
+    depends_on:
+      - opensearch
+
+  traefik:
+    image: traefik:v3.4
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - traefik
+
+  citus-master:
+    container_name: "${COMPOSE_PROJECT_NAME:-citus}_master"
+    image: "citusdata/citus:13.0.3"
+    ports: [ "${COORDINATOR_EXTERNAL_PORT:-5432}:5432" ]
+    labels: [ "com.citusdata.role=Master" ]
+    environment: &AUTH
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      PGUSER: "${POSTGRES_USER:-postgres}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_HOST_AUTH_METHOD: "${POSTGRES_HOST_AUTH_METHOD:-trust}"
+      POSTGRES_DB: "gochat"
+    networks:
+      default:
+        aliases:
+          - master
+      citus:
+        aliases:
+          - master
+  citus-worker:
+    image: "citusdata/citus:13.0.3"
+    labels: [ "com.citusdata.role=Worker" ]
+    depends_on: [ citus-manager ]
+    environment: *AUTH
+    command: "/wait-for-manager.sh"
+    volumes:
+      - healthcheck-volume:/healthcheck
+    networks:
+      - default
+      - citus
+  citus-manager:
+    container_name: "${COMPOSE_PROJECT_NAME:-citus}_manager"
+    image: "citusdata/membership-manager:0.3.0"
+    volumes:
+      - "${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock"
+      - healthcheck-volume:/healthcheck
+    depends_on: [ citus-master ]
+    environment: *AUTH
+    networks:
+      default:
+        aliases:
+          - manager
+      citus:
+        aliases:
+          - manager
+
+volumes:
+  scylla-data:
+  opensearch-data:
+  healthcheck-volume:
+
+networks:
+  traefik:
+    name: gochat_traefik
+  citus:
+    name: gochat_citus
