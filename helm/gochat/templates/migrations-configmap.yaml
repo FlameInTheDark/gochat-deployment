@@ -1,0 +1,11 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-migration-script
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "migrations") | nindent 4 }}
+data:
+  run-migrations.sh: |-
+{{- (.Files.Get "scripts/run-migrations.sh") | nindent 4 }}
+{{- end }}

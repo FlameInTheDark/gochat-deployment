@@ -425,6 +425,37 @@ ui:
   tolerations: []
   affinity: {}
 
+landing:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/flameinthedark/gochatui-landing
+    tag: "" # Overrides global.imageVariant when set
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+migrations:
+  enabled: true
+  image:
+    repository: golang
+    tag: 1.23-alpine
+    pullPolicy: IfNotPresent
+  pgAddress: ""
+  cassandraAddress: ""
+  repo: https://github.com/FlameInTheDark/gochat.git
+  branch: main
+  backoffLimit: 5
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 opensearch:
   enabled: true
   replicaCount: 1
@@ -548,6 +579,10 @@ ingress:
   hosts:
     - host: example.com
       paths:
+        - path: /
+          pathType: Prefix
+          service: landing
+          port: 80
         - path: /app
           pathType: Prefix
           service: ui
