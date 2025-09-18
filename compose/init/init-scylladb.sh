@@ -1,16 +1,11 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+SCYLLA_HOST="scylla"
 
-KEYSPACE_NAME=${SCYLLA_KEYSPACE_NAME:-gochat}
-REPLICATION_CLASS=${SCYLLA_REPLICATION_CLASS:-SimpleStrategy}
-REPLICATION_FACTOR=${SCYLLA_REPLICATION_FACTOR:-1}
-
-cqlsh_host=${SCYLLA_CONTACT_POINT:-localhost}
-
-until cqlsh "$cqlsh_host" -e "DESCRIBE KEYSPACES" >/dev/null 2>&1; do
-  echo "Waiting for Scylla to become available..."
-  sleep 5
+# Wait for ScyllaDB to be ready
+until cqlsh "$SCYLLA_HOST" -e "DESCRIBE KEYSPACES"; do
+    echo "Waiting for ScyllaDB to start..."
+    sleep 5
 done
 
-echo "Ensuring keyspace $KEYSPACE_NAME exists"
-cqlsh "$cqlsh_host" -e "CREATE KEYSPACE IF NOT EXISTS $KEYSPACE_NAME WITH replication = {'class': '$REPLICATION_CLASS', 'replication_factor': $REPLICATION_FACTOR};"
+# Create the keyspace
+cqlsh "$SCYLLA_HOST" -e "CREATE KEYSPACE IF NOT EXISTS gochat WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}"
