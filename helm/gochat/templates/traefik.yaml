@@ -1,0 +1,70 @@
+{{- if .Values.traefik.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-traefik
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "traefik") | nindent 4 }}
+spec:
+  type: {{ .Values.traefik.service.type }}
+  ports:
+    - name: web
+      port: {{ .Values.traefik.service.webPort }}
+      targetPort: {{ .Values.traefik.service.webPort }}
+    - name: dashboard
+      port: {{ .Values.traefik.service.dashboardPort }}
+      targetPort: {{ .Values.traefik.service.dashboardPort }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "traefik") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-traefik
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "traefik") | nindent 4 }}
+spec:
+  replicas: {{ .Values.traefik.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "traefik") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "traefik") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "gochat.traefikServiceAccountName" . }}
+      containers:
+        - name: traefik
+          image: "{{ .Values.traefik.image.repository }}:{{ .Values.traefik.image.tag }}"
+          imagePullPolicy: {{ .Values.traefik.image.pullPolicy }}
+{{- if .Values.traefik.additionalArguments }}
+          args:
+{{- range .Values.traefik.additionalArguments }}
+            - {{ . | quote }}
+{{- end }}
+{{- end }}
+          ports:
+            - containerPort: {{ .Values.traefik.service.webPort }}
+              name: web
+            - containerPort: {{ .Values.traefik.service.dashboardPort }}
+              name: dashboard
+          resources:
+            {{- toYaml .Values.traefik.resources | nindent 12 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.traefik.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.traefik.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.traefik.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

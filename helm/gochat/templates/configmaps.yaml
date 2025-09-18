@@ -1,0 +1,66 @@
+{{- if .Values.auth.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-auth-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "auth") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.auth.config }}
+{{ . | indent 4 }}
+{{- end }}
+  email_notify.tmpl: |
+{{- with .Values.auth.emailTemplate }}
+{{ . | indent 4 }}
+{{- end }}
+  password_reset.tmpl: |
+{{- with .Values.auth.passwordResetTemplate }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.api.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-api-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "api") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.api.config }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.ws.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-ws-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "ws") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.ws.config }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.indexer.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-indexer-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "indexer") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.indexer.config }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
