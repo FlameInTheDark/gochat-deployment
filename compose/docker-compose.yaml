@@ -181,8 +181,12 @@ services:
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-CustOM-Pa55w0Rd}"
     ulimits:
       memlock:
-        soft: -1
-        hard: -1
+        # Setting unlimited memlock requires additional capabilities that are
+        # not available in many Docker environments (including the one used
+        # for these exercises).  Use a reasonable default limit instead so
+        # the container can start without needing CAP_IPC_LOCK.
+        soft: 65536
+        hard: 65536
     volumes:
       - opensearch-data:/usr/share/opensearch/data
     ports:
