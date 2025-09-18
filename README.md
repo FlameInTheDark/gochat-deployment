@@ -20,7 +20,7 @@ This repository contains infrastructure assets for running the GoChat stack eith
    ```
    Update the copied files and adjust the volume mounts inside `compose/docker-compose.yaml` if you want Docker to use the customised versions. The committed files contain default values that allow the stack to boot without additional changes.
 2. Review the Traefik labels in the compose file and update domain names or paths to match your environment.
-3. (Optional) Choose which GoChat application images to deploy by setting `GOCHAT_IMAGE_VARIANT` to either `latest` (default) or `dev` before running Compose. To swap the UI for the static landing page container, set `GOCHAT_UI_IMAGE=gochatui-landing`.
+3. (Optional) Choose which GoChat application images to deploy by setting `GOCHAT_IMAGE_VARIANT` to either `latest` (default) or `dev` before running Compose. The stack always serves the static landing page at `/` alongside the full UI at `/app`; override `GOCHAT_LANDING_IMAGE` or `GOCHAT_UI_IMAGE` if you want to use custom containers.
 4. Start the stack:
   ```bash
   docker compose -f compose/docker-compose.yaml up -d
@@ -38,7 +38,7 @@ The compose bundle also includes:
 
 ## Helm chart
 
-The Helm chart deploys the same set of services as Docker Compose: ScyllaDB, NATS, KeyDB, the API/auth/ws/indexer services, UI, OpenSearch plus dashboards, Traefik and a single-node Citus master. Additional workers and the membership manager can be enabled through the chart values if you need a clustered PostgreSQL deployment.
+The Helm chart deploys the same set of services as Docker Compose: ScyllaDB, NATS, KeyDB, the API/auth/ws/indexer services, the UI and landing site, OpenSearch plus dashboards, Traefik and a single-node Citus master. Additional workers and the membership manager can be enabled through the chart values if you need a clustered PostgreSQL deployment.
 
 ### Quick start
 

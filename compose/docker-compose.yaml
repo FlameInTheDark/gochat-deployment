@@ -81,6 +81,19 @@ services:
       - traefik
       - default
 
+  landing:
+    image: ghcr.io/flameinthedark/${GOCHAT_LANDING_IMAGE:-gochatui-landing}:${GOCHAT_IMAGE_VARIANT:-latest}
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.landing.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.landing.service=landing"
+      - "traefik.http.services.landing.loadbalancer.server.port=80"
+      - "traefik.docker.network=gochat_traefik"
+    networks:
+      - traefik
+      - default
+
   api:
     image: ghcr.io/flameinthedark/gochat-api:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always

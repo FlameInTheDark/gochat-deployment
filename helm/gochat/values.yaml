@@ -425,6 +425,21 @@ ui:
   tolerations: []
   affinity: {}
 
+landing:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/flameinthedark/gochatui-landing
+    tag: "" # Overrides global.imageVariant when set
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 migrations:
   enabled: true
   image:
@@ -564,6 +579,10 @@ ingress:
   hosts:
     - host: example.com
       paths:
+        - path: /
+          pathType: Prefix
+          service: landing
+          port: 80
         - path: /app
           pathType: Prefix
           service: ui
