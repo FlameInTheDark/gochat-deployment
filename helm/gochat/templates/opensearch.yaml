@@ -1,0 +1,98 @@
+{{- if .Values.opensearch.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-opensearch
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "opensearch") | nindent 4 }}
+spec:
+  type: {{ .Values.opensearch.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.opensearch.service.port }}
+      targetPort: {{ .Values.opensearch.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "opensearch") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "gochat.fullname" . }}-opensearch
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "opensearch") | nindent 4 }}
+spec:
+  serviceName: {{ include "gochat.fullname" . }}-opensearch
+  replicas: {{ .Values.opensearch.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "opensearch") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "opensearch") | nindent 8 }}
+    spec:
+      containers:
+        - name: opensearch
+          image: "{{ .Values.opensearch.image.repository }}:{{ .Values.opensearch.image.tag }}"
+          imagePullPolicy: {{ .Values.opensearch.image.pullPolicy }}
+{{- if .Values.opensearch.extraArgs }}
+          args:
+{{- range .Values.opensearch.extraArgs }}
+            - {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- if .Values.opensearch.env }}
+          env:
+{{- range $key, $value := .Values.opensearch.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+{{- end }}
+{{- end }}
+          ports:
+            - containerPort: {{ .Values.opensearch.service.port }}
+              name: http
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/opensearch/data
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+          resources:
+            {{- toYaml .Values.opensearch.resources | nindent 12 }}
+      {{- if not .Values.opensearch.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.opensearch.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.opensearch.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.opensearch.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.opensearch.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.opensearch.persistence.accessModes | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.opensearch.persistence.size }}
+        {{- if .Values.opensearch.persistence.storageClass }}
+        storageClassName: {{ .Values.opensearch.persistence.storageClass }}
+        {{- end }}
+  {{- end }}
+{{- end }}

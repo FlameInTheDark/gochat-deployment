@@ -1,0 +1,78 @@
+{{- $root := . -}}
+{{- $components := list (dict "name" "nats" "cfg" .Values.nats) (dict "name" "indexer-nats" "cfg" .Values.indexerNats) -}}
+{{- $state := dict "first" true -}}
+{{- range $item := $components }}
+  {{- $cfg := $item.cfg -}}
+  {{- if $cfg.enabled }}
+    {{- if not (index $state "first") }}
+---
+    {{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" $root }}-{{ $item.name | replace "_" "-" }}
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" $root "Component" $item.name) | nindent 4 }}
+spec:
+  type: {{ $cfg.service.type }}
+  ports:
+    - name: client
+      port: {{ $cfg.service.ports.client }}
+      targetPort: {{ $cfg.service.ports.client }}
+    - name: monitoring
+      port: {{ $cfg.service.ports.monitoring }}
+      targetPort: {{ $cfg.service.ports.monitoring }}
+    - name: route
+      port: {{ $cfg.service.ports.route }}
+      targetPort: {{ $cfg.service.ports.route }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" $root "Component" $item.name) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" $root }}-{{ $item.name | replace "_" "-" }}
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" $root "Component" $item.name) | nindent 4 }}
+spec:
+  replicas: {{ $cfg.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" $root "Component" $item.name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" $root "Component" $item.name) | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ $item.name | replace "_" "-" }}
+          image: "{{ $cfg.image.repository }}:{{ $cfg.image.tag }}"
+          imagePullPolicy: {{ $cfg.image.pullPolicy }}
+          ports:
+            - containerPort: {{ $cfg.service.ports.client }}
+              name: client
+            - containerPort: {{ $cfg.service.ports.monitoring }}
+              name: monitoring
+            - containerPort: {{ $cfg.service.ports.route }}
+              name: route
+          resources:
+            {{- toYaml $cfg.resources | nindent 12 }}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cfg.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- $_ := set $state "first" false }}
+  {{- end }}
+{{- end }}

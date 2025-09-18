@@ -1,0 +1,57 @@
+{{- if and .Values.citus.enabled .Values.citus.manager.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-citus-manager
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "citus-manager") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "citus-manager") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "citus-manager") | nindent 8 }}
+    spec:
+      containers:
+        - name: manager
+          image: "citusdata/membership-manager:0.3.0"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.citus.auth.postgresUser | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.citus.auth.postgresPassword | quote }}
+            - name: PGUSER
+              value: {{ .Values.citus.auth.postgresUser | quote }}
+            - name: PGPASSWORD
+              value: {{ .Values.citus.auth.postgresPassword | quote }}
+          resources:
+            {{- toYaml .Values.citus.manager.resources | nindent 12 }}
+{{- if .Values.citus.manager.extraVolumeMounts }}
+          volumeMounts:
+{{- toYaml .Values.citus.manager.extraVolumeMounts | indent 12 }}
+{{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.citus.manager.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.citus.manager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.citus.manager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.citus.manager.extraVolumes }}
+      volumes:
+{{- toYaml .Values.citus.manager.extraVolumes | indent 8 }}
+{{- end }}
+{{- end }}

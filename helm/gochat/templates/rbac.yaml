@@ -1,0 +1,33 @@
+{{- if and .Values.traefik.enabled .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "gochat.fullname" . }}-traefik
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "traefik") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "secrets", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["traefik.io"]
+    resources: ["ingressroutes", "middlewares", "tlsoptions", "tlsstores", "traefikservices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "gochat.fullname" . }}-traefik
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "traefik") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "gochat.fullname" . }}-traefik
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "gochat.traefikServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

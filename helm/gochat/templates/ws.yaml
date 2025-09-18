@@ -1,0 +1,70 @@
+{{- if .Values.ws.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-ws
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "ws") | nindent 4 }}
+spec:
+  type: {{ .Values.ws.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.ws.service.port }}
+      targetPort: {{ .Values.ws.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "ws") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-ws
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "ws") | nindent 4 }}
+spec:
+  replicas: {{ .Values.ws.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "ws") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "ws") | nindent 8 }}
+    spec:
+      containers:
+        - name: ws
+          image: "{{ .Values.ws.image.repository }}:{{ .Values.ws.image.tag }}"
+          imagePullPolicy: {{ .Values.ws.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.ws.service.port }}
+              name: http
+{{- if .Values.ws.env }}
+          env:
+{{ toYaml .Values.ws.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /dist/config.yaml
+              subPath: config.yaml
+          resources:
+            {{- toYaml .Values.ws.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-ws-config
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ws.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ws.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ws.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
