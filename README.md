@@ -5,6 +5,7 @@ This repository contains infrastructure assets for running the GoChat stack eith
 ## Repository layout
 
 - `compose/` – Docker Compose manifests, default configuration files, bootstrap scripts and templates.
+- `db/` – Database migration files for PostgreSQL and ScyllaDB that are applied automatically during deployments.
 - `helm/gochat/` – A Helm chart that deploys the complete GoChat stack on Kubernetes.
 - `README.md` – This guide.
 
@@ -19,11 +20,11 @@ This repository contains infrastructure assets for running the GoChat stack eith
    ```
    Update the copied files and adjust the volume mounts inside `compose/docker-compose.yaml` if you want Docker to use the customised versions. The committed files contain default values that allow the stack to boot without additional changes.
 2. Review the Traefik labels in the compose file and update domain names or paths to match your environment.
-3. (Optional) Choose which GoChat application images to deploy by setting `GOCHAT_IMAGE_VARIANT` to either `latest` (default) or `dev` before running Compose.
+3. (Optional) Choose which GoChat application images to deploy by setting `GOCHAT_IMAGE_VARIANT` to either `latest` (default) or `dev` before running Compose. To swap the UI for the static landing page container, set `GOCHAT_UI_IMAGE=gochatui-landing`.
 4. Start the stack:
-   ```bash
-   docker compose -f compose/docker-compose.yaml up -d
-   ```
+  ```bash
+  docker compose -f compose/docker-compose.yaml up -d
+  ```
 5. Stop everything when finished:
    ```bash
    docker compose -f compose/docker-compose.yaml down
@@ -32,6 +33,7 @@ This repository contains infrastructure assets for running the GoChat stack eith
 The compose bundle also includes:
 
 - `compose/init/init-scylladb.sh` which guarantees the `gochat` keyspace exists when Scylla boots.
+- Automatic PostgreSQL and Scylla migrations through the `migrations` one-shot service. Override `PG_ADDRESS` and `CASSANDRA_ADDRESS` if you need to point at external databases.
 - Email templates under `compose/templates/` used by the auth service.
 
 ## Helm chart
@@ -57,6 +59,7 @@ The Helm chart deploys the same set of services as Docker Compose: ScyllaDB, NAT
 ### Configuration highlights
 
 - **Config maps** – API, auth, websocket and indexer services load their YAML configuration from config maps rendered from the values file. Update the relevant `config` blocks to match your infrastructure.
+- **Migrations job** – A Helm hook spins up a transient job that runs both PostgreSQL and Scylla migrations on install/upgrade. Adjust the `migrations` block in `values.yaml` to point at custom database endpoints if required.
 - **Persistent storage** – Scylla, OpenSearch and Citus master use persistent volume claims by default. Storage class names and sizes are configurable via the `persistence` sections.
 - **Optional components** – Disable services by toggling the `enabled` flag under their respective section. For example, set `traefik.enabled=false` if you already run an ingress controller. Enable Citus workers by setting `citus.worker.enabled=true` and adjusting `replicaCount`.
 - **Image variants** – Set `global.imageVariant` to `latest` (default) or `dev` to control which tag the API, auth, websocket, indexer and UI deployments use. Individual services can still override the `image.tag` field if necessary.

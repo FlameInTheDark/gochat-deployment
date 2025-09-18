@@ -1,0 +1,70 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gochat.fullname" . }}-migrations
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "migrations") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit | default 5 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "migrations") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $defaultPg := "" -}}
+      {{- if .Values.citus.enabled -}}
+        {{- $defaultPg = printf "postgres://%s@%s-citus-master:%d/%s?sslmode=disable" .Values.citus.auth.postgresUser (include "gochat.fullname" .) .Values.citus.master.service.port .Values.citus.auth.postgresDb -}}
+      {{- end -}}
+      {{- $defaultCassandra := "" -}}
+      {{- if .Values.scylla.enabled -}}
+        {{- $defaultCassandra = printf "cassandra://%s-scylla:%d/%s?x-multi-statement=true" (include "gochat.fullname" .) .Values.scylla.service.ports.cql .Values.scylla.lifecycle.createKeyspace.keyspace -}}
+      {{- end -}}
+      containers:
+        - name: migrations
+          image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag }}"
+          imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
+          command: ["/bin/sh", "/scripts/run-migrations.sh"]
+          env:
+            - name: PG_ADDRESS
+              value: {{ default $defaultPg .Values.migrations.pgAddress | quote }}
+            - name: CASSANDRA_ADDRESS
+              value: {{ default $defaultCassandra .Values.migrations.cassandraAddress | quote }}
+          volumeMounts:
+            - name: migrate-script
+              mountPath: /scripts/run-migrations.sh
+              subPath: run-migrations.sh
+            - name: migrations
+              mountPath: /migrations
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+      volumes:
+        - name: migrate-script
+          configMap:
+            name: {{ include "gochat.fullname" . }}-migration-script
+            defaultMode: 0555
+        - name: migrations
+          configMap:
+            name: {{ include "gochat.fullname" . }}-migrations
+      {{- with .Values.migrations.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

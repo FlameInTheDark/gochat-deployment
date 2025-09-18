@@ -56,12 +56,14 @@ services:
         condition: service_started
       citus-master:
         condition: service_started
+      migrations:
+        condition: service_completed_successfully
     networks:
       - traefik
       - default
 
   ui:
-    image: ghcr.io/flameinthedark/gochatui:${GOCHAT_IMAGE_VARIANT:-latest}
+    image: ghcr.io/flameinthedark/${GOCHAT_UI_IMAGE:-gochatui}:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     labels:
       - "traefik.enable=true"
@@ -99,6 +101,8 @@ services:
         condition: service_started
       auth:
         condition: service_started
+      migrations:
+        condition: service_completed_successfully
     networks:
       - traefik
       - default
@@ -134,6 +138,22 @@ services:
         condition: service_started
       opensearch:
         condition: service_started
+
+  migrations:
+    image: golang:1.23-alpine
+    command: ["/bin/sh", "/scripts/run-migrations.sh"]
+    environment:
+      PG_ADDRESS: ${PG_ADDRESS:-postgres://postgres@citus-master:5432/gochat?sslmode=disable}
+      CASSANDRA_ADDRESS: ${CASSANDRA_ADDRESS:-cassandra://scylla:9042/gochat?x-multi-statement=true}
+    volumes:
+      - ./db:/migrations:ro
+      - ./compose/init/run-migrations.sh:/scripts/run-migrations.sh:ro
+    depends_on:
+      scylla:
+        condition: service_healthy
+      citus-master:
+        condition: service_started
+    restart: "no"
 
   opensearch:
     image: opensearchproject/opensearch:2.13.0

@@ -425,6 +425,20 @@ ui:
   tolerations: []
   affinity: {}
 
+migrations:
+  enabled: true
+  image:
+    repository: golang
+    tag: 1.23-alpine
+    pullPolicy: IfNotPresent
+  pgAddress: ""
+  cassandraAddress: ""
+  backoffLimit: 5
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 opensearch:
   enabled: true
   replicaCount: 1
