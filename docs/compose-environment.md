@@ -6,6 +6,7 @@ The Docker Compose stack relies on a mix of environment variables with sensible 
 
 - `PUBLIC_WS_URL` – Public WebSocket endpoint served by Traefik. Use the externally reachable `wss://` or `https://` origin for the `/ws` route so the UI can establish realtime connections.
 - `PUBLIC_API_BASE_URL` – Public HTTPS endpoint for the REST API. The value must match the domain (and optional base path) exposed by Traefik for `/api/v1`.
+- `PUBLIC_BASE_PATH` – Base pathname where the UI is mounted. Defaults to `/`, but update it when serving the SPA from a subdirectory so client-side routing generates correct links.
 
 ## Optional variables
 
