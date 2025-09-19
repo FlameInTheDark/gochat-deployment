@@ -5,13 +5,11 @@ The Helm chart exposes most tunables through `values.yaml`. Override them with `
 ## Required values
 
 - `ingress.hosts[].host` – Replace `example.com` with the fully qualified domain you plan to expose through your ingress controller.
-- `ingress.hosts[].paths` – Ensure the `/app` path points at the UI service. Add or retain the `/` path if you enable the landing deployment.
+- `ingress.hosts[].paths` – Ensure the `/` path points at the UI service. Adjust or add additional prefixes for the API (`/api/v1`) and websocket (`/ws`) routes as needed.
 
 ## Optional values and related environment variables
 
 - `global.imageVariant` – Changes the default tag (`latest` or `dev`) applied to the GoChat workloads.
-- `landing.enabled` – Toggles the static marketing site. When enabled, the chart publishes it on `/` via ingress and Traefik.
-- `landing.image.*` – Override the landing container repository, tag or pull policy.
 - `ui.image.*` – Override the SPA image repository, tag or pull policy.
 - `migrations.enabled` – Controls whether the Helm hook job runs database migrations on install/upgrade.
 - `migrations.image.*` – Choose the container that executes the migrations helper script.

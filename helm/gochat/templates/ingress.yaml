@@ -12,12 +12,6 @@ metadata:
     {{- $_ := set $annotations $key $value }}
   {{- end }}
 {{- end }}
-{{- if .Values.traefik.enabled }}
-  {{- $middlewareName := printf "%s-%s" .Release.Namespace (printf "%s-ui-stripprefix" (include "gochat.fullname" .)) }}
-  {{- if not (hasKey $annotations "traefik.ingress.kubernetes.io/router.middlewares") }}
-    {{- $_ := set $annotations "traefik.ingress.kubernetes.io/router.middlewares" (printf "%s@kubernetescrd" $middlewareName) }}
-  {{- end }}
-{{- end }}
 {{- if gt (len $annotations) 0 }}
   annotations:
     {{- toYaml $annotations | nindent 4 }}
@@ -32,7 +26,6 @@ spec:
       http:
         paths:
 {{- range .paths }}
-{{- if or (ne .service "landing") $root.Values.landing.enabled }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
             backend:
@@ -40,7 +33,6 @@ spec:
                 name: {{ printf "%s-%s" (include "gochat.fullname" $root) .service }}
                 port:
                   number: {{ .port }}
-{{- end }}
 {{- end }}
 {{- end }}
 {{- if .Values.ingress.tls }}

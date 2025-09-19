@@ -9,10 +9,8 @@ The Docker Compose stack relies on a mix of environment variables with sensible 
 
 ## Optional variables
 
-- `COMPOSE_PROFILES` – Activate optional service profiles. Set to `landing` to include the marketing site on `/`.
 - `GOCHAT_IMAGE_VARIANT` – Select the Docker tag (`latest` or `dev`) shared by the GoChat application containers.
 - `GOCHAT_UI_IMAGE` – Override the repository name for the SPA image while keeping the standard tag handling.
-- `GOCHAT_LANDING_IMAGE` – Override the repository that serves the static landing page when the `landing` profile is enabled.
 - `SCYLLA_DEVELOPER_MODE` – Toggle Scylla developer mode (defaults to `1` to relax resource checks for local usage).
 - `PG_ADDRESS` – PostgreSQL connection string consumed by the migrations helper. Defaults to the internal Citus master service.
 - `CASSANDRA_ADDRESS` – ScyllaDB connection string for migrations. Defaults to the internal Scylla service with multi-statement support enabled.
