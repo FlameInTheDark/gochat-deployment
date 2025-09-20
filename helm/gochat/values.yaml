@@ -420,6 +420,7 @@ ui:
   env:
     PUBLIC_WS_URL: "https://example.com"
     PUBLIC_API_BASE_URL: "https://example.com"
+    PUBLIC_BASE_PATH: "/"
   resources: {}
   nodeSelector: {}
   tolerations: []
