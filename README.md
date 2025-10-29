@@ -15,10 +15,10 @@ This repository contains infrastructure assets for running the GoChat stack eith
 
 1. Copy the sample configuration files if you need custom values:
    ```bash
-   cp compose/config/api_config.yaml compose/config/api_config.local.yaml
-   cp compose/config/auth_config.yaml compose/config/auth_config.local.yaml
-   cp compose/config/indexer_config.yaml compose/config/indexer_config.local.yaml
-   cp compose/config/ws_config.yaml compose/config/ws_config.local.yaml
+   cp compose/config/api_config.example.yaml compose/config/api_config.local.yaml
+   cp compose/config/auth_config.example.yaml compose/config/auth_config.local.yaml
+   cp compose/config/indexer_config.example.yaml compose/config/indexer_config.local.yaml
+   cp compose/config/ws_config.example.yaml compose/config/ws_config.local.yaml
    ```
    Update the copied files and adjust the volume mounts inside `compose/docker-compose.yaml` if you want Docker to use the customised versions. The committed files contain default values that allow the stack to boot without additional changes.
 2. Review the Traefik labels in the compose file and update domain names or paths to match your environment.
