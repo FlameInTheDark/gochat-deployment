@@ -1,0 +1,70 @@
+{{- if .Values.attachments.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-attachments
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "attachments") | nindent 4 }}
+spec:
+  type: {{ .Values.attachments.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.attachments.service.port }}
+      targetPort: {{ .Values.attachments.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "attachments") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-attachments
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "attachments") | nindent 4 }}
+spec:
+  replicas: {{ .Values.attachments.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "attachments") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "attachments") | nindent 8 }}
+    spec:
+      containers:
+        - name: attachments
+          image: "{{ .Values.attachments.image.repository }}:{{ default .Values.global.imageVariant .Values.attachments.image.tag }}"
+          imagePullPolicy: {{ .Values.attachments.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.attachments.service.port }}
+              name: http
+{{- if .Values.attachments.env }}
+          env:
+{{ toYaml .Values.attachments.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /dist/config.yaml
+              subPath: config.yaml
+          resources:
+            {{- toYaml .Values.attachments.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-attachments-config
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.attachments.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.attachments.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.attachments.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

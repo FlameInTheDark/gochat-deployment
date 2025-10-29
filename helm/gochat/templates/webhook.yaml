@@ -1,0 +1,70 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-webhook
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "webhook") | nindent 4 }}
+spec:
+  type: {{ .Values.webhook.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.webhook.service.port }}
+      targetPort: {{ .Values.webhook.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "webhook") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-webhook
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "webhook") | nindent 4 }}
+spec:
+  replicas: {{ .Values.webhook.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "webhook") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "webhook") | nindent 8 }}
+    spec:
+      containers:
+        - name: webhook
+          image: "{{ .Values.webhook.image.repository }}:{{ default .Values.global.imageVariant .Values.webhook.image.tag }}"
+          imagePullPolicy: {{ .Values.webhook.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.webhook.service.port }}
+              name: http
+{{- if .Values.webhook.env }}
+          env:
+{{ toYaml .Values.webhook.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /dist/config.yaml
+              subPath: config.yaml
+          resources:
+            {{- toYaml .Values.webhook.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-webhook-config
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webhook.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webhook.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webhook.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
