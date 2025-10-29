@@ -196,12 +196,14 @@ services:
       GOCHAT_MIGRATIONS_REPO: ${GOCHAT_MIGRATIONS_REPO:-https://github.com/FlameInTheDark/gochat.git}
       GOCHAT_MIGRATIONS_BRANCH: ${GOCHAT_MIGRATIONS_BRANCH:-main}
     volumes:
-      - ./helm/gochat/files/scripts/run-migrations.sh:/scripts/run-migrations.sh:ro
+      - ../helm/gochat/files/scripts/run-migrations.sh:/scripts/run-migrations.sh:ro
     depends_on:
       scylla:
         condition: service_healthy
       citus-master:
         condition: service_started
+      citus-init:
+        condition: service_completed_successfully
     restart: "no"
 
   opensearch:
