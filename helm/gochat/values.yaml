@@ -131,10 +131,10 @@ auth:
     smtp_use_tls: false
 
     # Redis
-    keydb: "keydb:6379"
+    keydb: "gochat-keydb:6379"
 
     # PostgreSQL
-    pg_dsn: "host=citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
   emailTemplate: |
     <!DOCTYPE html>
     <html lang="en">
@@ -323,37 +323,56 @@ api:
 
     # API
     swagger: true
+    api_log: true
+    server_address: ":3100"
     rate_limit_time: 1
     rate_limit_requests: 10
-    server_address: ":3100"
+    idempotency_storage_lifetime: 10 # seconds
 
     # Auth
     auth_secret: "change_me_before_use_it_in_production"
 
     # Cassandra
-    cluster: ["scylla"]
+    cluster: ["gochat-scylla"]
     cluster_keyspace: "gochat"
 
     # Redis
-    keydb: "keydb:6379"
-
-    # S3
-    s3_endpoint: minio:9000
-    s3_access_key_id: lF0b7V15OZCv2eGggCg5
-    s3_secret_access_key: 55ug80hPgx4nFPoFJXvwBHns1XwXmZrcKli8UHoz
+    keydb: "gochat-keydb:6379"
 
     # PostgreSQL
-    pg_dsn: "host=citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    pg_retries: 5
 
     # OpenSearch
     os_insecure_skip_verify: true
-    os_addresses: ["http://opensearch:9200"]
+    os_addresses: ["http://gochat-opensearch:9200"]
     os_username: "admin"
     os_password: "CustOM-Pa55w0Rd"
 
     # NATS
-    nats_conn_string: "nats://nats:4222"
-    indexer_nats_conn_string: "nats://indexer-nats:4222"
+    nats_conn_string: "nats://gochat-nats:4222"
+    indexer_nats_conn_string: "nats://gochat-indexer-nats:4222"
+
+    # Uploads / Attachments
+    upload_limit: 50000000 # bytes
+    attachment_ttl_minutes: 10
+
+    voice_region: global # default region id
+    voice_regions:
+      - id: global
+        name: Global
+      - id: eu
+        name: Europe (Frankfurt)
+      - id: us-east
+        name: US East (Ashburn)
+
+    # Discovery (required by API to select SFU routes)
+    etcd_endpoints:
+      - "http://gochat-etcd:2379"
+    etcd_prefix: "/gochat/sfu"
+    # Optional etcd auth (recommended in production)
+    etcd_username: "root"
+    etcd_password: "changeme"
   resources: {}
   nodeSelector: {}
   tolerations: []
@@ -375,11 +394,14 @@ ws:
     auth_secret: "change_me_before_use_it_in_production"
 
     # Cassandra
-    cluster: ["scylla"]
+    cluster: ["gochat-scylla"]
     cluster_keyspace: "gochat"
 
     # PostgreSQL
-    pg_dsn: "host=citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+
+    # Cache Address (KeyDB)
+    cache_addr: "gochat-keydb:6379"
   resources: {}
   nodeSelector: {}
   tolerations: []
@@ -395,13 +417,120 @@ indexer:
   env: []
   config: |
     # NATS
-    nats_conn_string: "nats://indexer-nats:4222"
+    nats_conn_string: "nats://gochat-indexer-nats:4222"
 
     # OpenSearch
     os_insecure_skip_verify: true
-    os_addresses: ["http://opensearch:9200"]
+    os_addresses: ["http://gochat-opensearch:9200"]
     os_username: "admin"
     os_password: "CustOM-Pa55w0Rd"
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+attachments:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/flameinthedark/gochat-attachments
+    tag: "" # Overrides global.imageVariant when set
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3200
+  env: []
+  config: |
+    # Network
+    server_address: ":3200"
+
+    # Auth
+    auth_secret: "change_me_before_use_it_in_production"
+
+    # Cassandra
+    cluster: ["gochat-scylla"]
+    cluster_keyspace: "gochat"
+
+    # Nats
+    # nats_conn_string: "nats://gochat-nats:4222"
+
+    # S3
+    s3_endpoint: "minio:9000"
+    s3_access_key_id: "admin"
+    s3_secret_access_key: "password"
+    s3_bucket: "gochat"
+    # Optional external URL (leave empty to derive from endpoint + bucket)
+    s3_external_url: ""
+    s3_use_ssl: false
+
+    # PostgreSQL (for setting active avatar)
+    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    pg_retries: 5
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+webhook:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/flameinthedark/gochat-webhook
+    tag: "" # Overrides global.imageVariant when set
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3200
+  env: []
+  config: |
+    server_address: ":3200"
+    api_log: true
+    swagger: false
+
+    # Discovery (for SFU heartbeats)
+    etcd_endpoints:
+      - "http://gochat-etcd:2379"
+    etcd_prefix: "/gochat/sfu"
+    etcd_username: "root"
+    etcd_password: "changeme"
+
+    # Cassandra (for attachment finalization)
+    cluster: ["gochat-scylla"]
+    cluster_keyspace: "gochat"
+
+    # Webhook JWT secret (HS256). Tokens include {"typ":"<service>", "id":"<uuid>"}.
+    jwt_secret: "supersecret-webhook-jwt"
+
+    # Redis
+    keydb: "gochat-keydb:6379"
+
+    # NATS
+    nats_conn_string: "nats://gochat-nats:4222"
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+etcd:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: quay.io/coreos/etcd
+    tag: v3.5.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    clientPort: 2379
+    peerPort: 2380
+  env:
+    rootPassword: changeme
+  extraEnv: []
+  persistence:
+    enabled: false
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
   resources: {}
   nodeSelector: {}
   tolerations: []

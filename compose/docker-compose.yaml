@@ -42,7 +42,7 @@ services:
     image: ghcr.io/flameinthedark/gochat-auth:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/auth_config.yaml:/dist/config.yaml
+      - ./config/auth_config.example.yaml:/dist/config.yaml
       - ./templates/email_notify.tmpl:/dist/email_notify.tmpl
       - ./templates/password_reset.tmpl:/dist/password_reset.tmpl
     labels:
@@ -83,7 +83,7 @@ services:
     image: ghcr.io/flameinthedark/gochat-api:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/api_config.yaml:/dist/config.yaml
+      - ./config/api_config.example.yaml:/dist/config.yaml
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=PathPrefix(`/api/v1`)"
@@ -105,17 +105,40 @@ services:
       - traefik
       - default
 
+  attachments:
+    image: ghcr.io/flameinthedark/gochat-attachments:${GOCHAT_IMAGE_VARIANT:-latest}
+    restart: always
+    volumes:
+      - ./config/attachments_config.example.yaml:/dist/config.yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.attachments.rule=PathPrefix(`/api/v1/upload`)"
+      - "traefik.http.routers.attachments.priority=100"
+      - "traefik.http.routers.attachments.service=attachments"
+      - "traefik.http.services.attachments.loadbalancer.server.port=3200"
+      - "traefik.docker.network=gochat_traefik"
+    depends_on:
+      scylla:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      citus-master:
+        condition: service_started
+    networks:
+      - traefik
+      - default
+
   ws:
     image: ghcr.io/flameinthedark/gochat-ws:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/ws_config.yaml:/dist/config.yaml
+      - ./config/ws_config.example.yaml:/dist/config.yaml
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.ws.rule=PathPrefix(`/ws`)"
       - "traefik.http.routers.ws.middlewares=ws-stripprefix"
-      - "traefik.http.middlewares.ws-stripprefix.stripPrefix.prefixes=/ws"
-      - "traefik.http.middlewares.ws-stripprefix.stripPrefix.forceSlash=true"
+      - "traefik.http.middlewares.ws-stripprefix.stripprefix.prefixes=/ws"
+      - "traefik.http.middlewares.ws-stripprefix.stripprefix.forceslash=true"
       - "traefik.http.routers.ws.service=ws"
       - "traefik.http.services.ws.loadbalancer.server.port=3100"
       - "traefik.docker.network=gochat_traefik"
@@ -126,11 +149,38 @@ services:
       - traefik
       - default
 
+  webhook:
+    image: ghcr.io/flameinthedark/gochat-webhook:${GOCHAT_IMAGE_VARIANT:-latest}
+    restart: always
+    volumes:
+      - ./config/webhook_config.example.yaml:/dist/config.yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webhook.rule=PathPrefix(`/api/v1/webhook`)"
+      - "traefik.http.routers.webhook.priority=100"
+      - "traefik.http.routers.webhook.service=webhook"
+      - "traefik.http.services.webhook.loadbalancer.server.port=3200"
+      - "traefik.docker.network=gochat_traefik"
+    depends_on:
+      traefik:
+        condition: service_started
+      etcd:
+        condition: service_started
+      scylla:
+        condition: service_healthy
+      keydb:
+        condition: service_started
+      nats:
+        condition: service_started
+    networks:
+      - traefik
+      - default
+
   indexer:
     image: ghcr.io/flameinthedark/gochat-indexer:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/indexer_config.yaml:/dist/config.yaml
+      - ./config/indexer_config.example.yaml:/dist/config.yaml
     depends_on:
       indexer-nats:
         condition: service_started
@@ -192,6 +242,10 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.transport.respondingTimeouts.idleTimeout=120s"
+      - "--entrypoints.web.transport.respondingTimeouts.readTimeout=0s"
+      - "--entrypoints.web.transport.respondingTimeouts.writeTimeout=0s"
+      - "--serversTransport.forwardingTimeouts.idleConnTimeout=120s"
     ports:
       - "80:80"
       - "8080:8080"
@@ -199,6 +253,64 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - traefik
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules
+      - prometheus-data:/prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+
+  postgres-exporter-master:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:postgres@citus-master:5432/gochat?sslmode=disable
+      - PG_EXPORTER_EXTEND_QUERY_PATH=/etc/postgres_exporter/queries.yml
+      - PG_EXPORTER_AUTO_DISCOVER_DATABASES=false
+      - PG_EXPORTER_EXCLUDE_DATABASES=postgres,template0,template1
+    depends_on:
+      citus-master:
+        condition: service_started
+      citus-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./monitoring/postgres-exporter/queries-citus.yml:/etc/postgres_exporter/queries.yml:ro
+
+  postgres-exporter-worker:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:postgres@citus-worker:5432/postgres?sslmode=disable
+      - PG_EXPORTER_AUTO_DISCOVER_DATABASES=true
+    depends_on:
+      - citus-worker
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3200:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+
+  grafana:
+    image: grafana/grafana-oss
+    restart: always
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3030:3000"
 
   citus-master:
     container_name: "${COMPOSE_PROJECT_NAME:-citus}_master"
@@ -246,9 +358,38 @@ services:
         aliases:
           - manager
 
+  citus-init:
+    image: postgres:15-alpine
+    restart: "no"
+    depends_on:
+      citus-master:
+        condition: service_started
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD:-postgres}
+    entrypoint: ["/bin/sh", "-c", "until pg_isready -h citus-master -p 5432 -U ${POSTGRES_USER:-postgres}; do sleep 1; done; psql -h citus-master -U ${POSTGRES_USER:-postgres} -d gochat -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS citus;'" ]
+    networks:
+      - citus
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    restart: always
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=no
+      - ETCD_ROOT_PASSWORD=${ETCD_ROOT_PASSWORD:-changeme}
+      - ETCD_ENABLE_V2=false
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER=etcd=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_NAME=etcd
+
 volumes:
   scylla-data:
   opensearch-data:
+  prometheus-data:
+  grafana-data:
   healthcheck-volume:
 
 networks:
