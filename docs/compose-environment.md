@@ -12,6 +12,7 @@ The Docker Compose stack relies on a mix of environment variables with sensible 
 
 - `GOCHAT_IMAGE_VARIANT` – Select the Docker tag (`latest` or `dev`) shared by the GoChat application containers.
 - `GOCHAT_UI_IMAGE` – Override the repository name for the SPA image while keeping the standard tag handling.
+- `API_CONFIG_FILE`, `AUTH_CONFIG_FILE`, `INDEXER_CONFIG_FILE`, `WS_CONFIG_FILE` – Override which configuration file from `compose/config/` is mounted into each respective service. Defaults map to the committed `.yaml` files but can be switched to `.local.yaml` copies without editing the Compose manifest.
 - `SCYLLA_DEVELOPER_MODE` – Toggle Scylla developer mode (defaults to `1` to relax resource checks for local usage).
 - `PG_ADDRESS` – PostgreSQL connection string consumed by the migrations helper. Defaults to the internal Citus master service.
 - `CASSANDRA_ADDRESS` – ScyllaDB connection string for migrations. Defaults to the internal Scylla service with multi-statement support enabled.
