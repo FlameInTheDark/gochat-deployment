@@ -42,9 +42,9 @@ services:
     image: ghcr.io/flameinthedark/gochat-auth:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/auth_config.yaml:/dist/config.yaml
-      - ./templates/email_notify.tmpl:/dist/email_notify.tmpl
-      - ./templates/password_reset.tmpl:/dist/password_reset.tmpl
+      - ./config/${AUTH_CONFIG_FILE:-auth_config.yaml}:/dist/config.yaml:ro
+      - ./templates/email_notify.tmpl:/dist/email_notify.tmpl:ro
+      - ./templates/password_reset.tmpl:/dist/password_reset.tmpl:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`)"
@@ -83,7 +83,7 @@ services:
     image: ghcr.io/flameinthedark/gochat-api:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/api_config.yaml:/dist/config.yaml
+      - ./config/${API_CONFIG_FILE:-api_config.yaml}:/dist/config.yaml:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=PathPrefix(`/api/v1`)"
@@ -109,7 +109,7 @@ services:
     image: ghcr.io/flameinthedark/gochat-ws:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/ws_config.yaml:/dist/config.yaml
+      - ./config/${WS_CONFIG_FILE:-ws_config.yaml}:/dist/config.yaml:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.ws.rule=PathPrefix(`/ws`)"
@@ -130,7 +130,7 @@ services:
     image: ghcr.io/flameinthedark/gochat-indexer:${GOCHAT_IMAGE_VARIANT:-latest}
     restart: always
     volumes:
-      - ./config/indexer_config.yaml:/dist/config.yaml
+      - ./config/${INDEXER_CONFIG_FILE:-indexer_config.yaml}:/dist/config.yaml:ro
     depends_on:
       indexer-nats:
         condition: service_started

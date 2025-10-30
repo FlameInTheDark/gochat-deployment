@@ -20,7 +20,7 @@ This repository contains infrastructure assets for running the GoChat stack eith
    cp compose/config/indexer_config.yaml compose/config/indexer_config.local.yaml
    cp compose/config/ws_config.yaml compose/config/ws_config.local.yaml
    ```
-   Update the copied files and adjust the volume mounts inside `compose/docker-compose.yaml` if you want Docker to use the customised versions. The committed files contain default values that allow the stack to boot without additional changes.
+   Update the copied files and set the corresponding `*_CONFIG_FILE` environment variables (`API_CONFIG_FILE`, `AUTH_CONFIG_FILE`, `INDEXER_CONFIG_FILE`, `WS_CONFIG_FILE`) to point at the `.local.yaml` copies so Docker Compose picks them up without editing the manifest. The committed files contain default values that allow the stack to boot without additional changes.
 2. Review the Traefik labels in the compose file and update domain names or paths to match your environment.
 3. (Optional) Choose which GoChat application images to deploy by setting `GOCHAT_IMAGE_VARIANT` to either `latest` (default) or `dev` before running Compose. The UI container now serves both the marketing site and application shell directly from `/`.
 4. Start the stack:
