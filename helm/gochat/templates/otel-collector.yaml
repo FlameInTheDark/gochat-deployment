@@ -1,0 +1,102 @@
+{{- if .Values.observability.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-otel-collector
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "otel-collector") | nindent 4 }}
+spec:
+  type: {{ .Values.observability.otelCollector.service.type }}
+  ports:
+    - name: grpc
+      port: {{ .Values.observability.otelCollector.service.grpcPort }}
+      targetPort: grpc
+    - name: http
+      port: {{ .Values.observability.otelCollector.service.httpPort }}
+      targetPort: http
+    - name: health
+      port: {{ .Values.observability.otelCollector.service.healthPort }}
+      targetPort: health
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "otel-collector") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "gochat.fullname" . }}-otel-collector
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "otel-collector") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "otel-collector") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "otel-collector") | nindent 8 }}
+    spec:
+      containers:
+        - name: otel-collector
+          image: "{{ .Values.observability.otelCollector.image.repository }}:{{ .Values.observability.otelCollector.image.tag }}"
+          imagePullPolicy: {{ .Values.observability.otelCollector.image.pullPolicy }}
+          args:
+            - --config=/etc/otelcol-contrib/config.yaml
+          env:
+            - name: OPENOBSERVE_ORG
+              value: {{ .Values.observability.otelCollector.env.openobserveOrg | quote }}
+            - name: OPENOBSERVE_BASIC_AUTH
+              value: {{ .Values.observability.otelCollector.env.openobserveBasicAuth | quote }}
+            - name: OPENOBSERVE_LOG_STREAM
+              value: {{ .Values.observability.otelCollector.env.openobserveLogStream | quote }}
+            - name: OPENOBSERVE_METRIC_STREAM
+              value: {{ .Values.observability.otelCollector.env.openobserveMetricStream | quote }}
+            - name: OPENOBSERVE_TRACE_STREAM
+              value: {{ .Values.observability.otelCollector.env.openobserveTraceStream | quote }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.observability.otelCollector.service.grpcPort }}
+            - name: http
+              containerPort: {{ .Values.observability.otelCollector.service.httpPort }}
+            - name: health
+              containerPort: {{ .Values.observability.otelCollector.service.healthPort }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+            - name: varlogcontainers
+              mountPath: /var/log/containers
+              readOnly: true
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+          resources:
+            {{- toYaml .Values.observability.otelCollector.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-otel-collector-config
+        - name: varlogcontainers
+          hostPath:
+            path: /var/log/containers
+            type: Directory
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+            type: DirectoryOrCreate
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.observability.otelCollector.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.observability.otelCollector.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.observability.otelCollector.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

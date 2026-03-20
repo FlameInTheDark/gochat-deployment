@@ -1,25 +1,62 @@
-# Helm configuration and environment variables
+# Helm Inputs
 
-The Helm chart exposes most tunables through `values.yaml`. Override them with `--set` or an additional values file when installing or upgrading the release.
+For Kubernetes deployments, run:
 
-## Required values
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -DeploymentType helm
+```
 
-- `ingress.hosts[].host` – Replace `example.com` with the fully qualified domain you plan to expose through your ingress controller.
-- `ingress.hosts[].paths` – Ensure the `/` path points at the UI service. Adjust or add additional prefixes for the API (`/api/v1`) and websocket (`/ws`) routes as needed.
+The wrapper generates `.generated/helm/values.generated.yaml` and installs the chart from [helm/gochat](/H:/Projects/Deployment/gochat-deployment/helm/gochat).
 
-## Optional values and related environment variables
+## Required Operator Inputs
 
-- `global.imageVariant` – Changes the default tag (`latest` or `dev`) applied to the GoChat workloads.
-- `ui.image.*` – Override the SPA image repository, tag or pull policy.
-- `migrations.enabled` – Controls whether the Helm hook job runs database migrations on install/upgrade.
-- `migrations.image.*` – Choose the container that executes the migrations helper script.
-- `migrations.pgAddress` – PostgreSQL connection string passed to the migrations job. Defaults to the in-cluster Citus master when available.
-- `migrations.cassandraAddress` – Cassandra/Scylla connection string for the migrations job. Defaults to the in-cluster Scylla service when enabled.
-- `migrations.repo` – Git repository cloned to retrieve migration files. Defaults to the upstream GoChat repository.
-- `migrations.branch` – Branch name checked out when fetching migrations (defaults to `main`).
-- `ingress.enabled` – Enables the bundled ingress definition. Disable if you prefer to manage routing separately.
-- `traefik.enabled` – Deploys Traefik as part of the release. Turn it off if you already run an ingress controller.
-- `citus.enabled` / `scylla.enabled` – Control the lifecycle of the bundled database services. If you disable them, supply external endpoints through the `migrations` block and service-specific configuration sections.
-- `imagePullSecrets` – Provide credentials when pulling images from private registries.
+- image repository prefix and tag for pulled images
+- base domain or explicit public hosts
+- namespace and release name
+- storage mode: bundled MinIO or external S3
+- ingress controller strategy:
+  - existing ingress controller
+  - bundled Traefik
 
-Refer to the inline comments in `helm/gochat/values.yaml` for exhaustive service-specific knobs such as resource requests, replica counts and storage options.
+## Storage Notes
+
+Bundled MinIO mode enables:
+
+- `minio.enabled=true`
+- public bucket bootstrap
+- permissive CORS for presigned browser uploads
+- storage and console ingress hosts
+
+External S3 mode disables bundled MinIO and writes the external endpoint details directly into the attachments config.
+
+Important: for bundled MinIO, the configured public storage host must be reachable from both the browser and the running pods, because GoChat presigns uploads against that public endpoint.
+
+## Router Shape
+
+The Helm deployment is configured to match the upstream backend compose router:
+
+- `<domain>/api/v1/*`
+- `<domain>/ws/*`
+
+When bundled Traefik is enabled, the chart creates the strip-prefix resources needed for `/ws`. If you use another ingress controller, you need to reproduce that rewrite behavior yourself.
+
+SFU is intentionally excluded from the Helm chart. If you need voice, deploy SFU separately with the required direct networking and reuse the automated `webhook` plus `etcd` components for registration.
+
+Example app endpoints for `example.com`:
+
+- UI: `https://example.com`
+- API: `https://example.com/api/v1`
+- WS: `wss://example.com/ws`
+
+## Values Rendered By The Wrapper
+
+The generated override file pins:
+
+- image repository and tag for every application container
+- `routing.appHost`
+- rendered config blocks for API/auth/attachments/ws/webhook/indexer/embedder
+- PostgreSQL, etcd, and OpenSearch secrets
+- ingress host rules for app, storage, and MinIO console
+- MinIO credentials and bucket settings when enabled
+
+The wrapper does not edit the base chart in place at runtime. It renders an override file and applies it with `helm upgrade --install`.

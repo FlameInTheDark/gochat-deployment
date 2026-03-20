@@ -1,0 +1,31 @@
+{{- if and .Values.ingress.enabled .Values.ws.enabled (not .Values.traefik.enabled) .Values.ingress.websocketAlias.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "gochat.fullname" . }}-ws-alias
+  labels:
+    {{- include "gochat.labels" . | nindent 4 }}
+{{- if .Values.ingress.websocketAlias.annotations }}
+  annotations:
+    {{- toYaml .Values.ingress.websocketAlias.annotations | nindent 4 }}
+{{- end }}
+spec:
+{{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+{{- end }}
+  rules:
+    - host: {{ .Values.routing.appHost }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.websocketAlias.path }}
+            pathType: {{ .Values.ingress.websocketAlias.pathType }}
+            backend:
+              service:
+                name: {{ include "gochat.fullname" . }}-ws
+                port:
+                  number: {{ .Values.ws.service.port }}
+{{- if .Values.ingress.tls }}
+  tls:
+{{- toYaml .Values.ingress.tls | nindent 4 }}
+{{- end }}
+{{- end }}

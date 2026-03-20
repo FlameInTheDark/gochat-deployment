@@ -48,26 +48,32 @@ spec:
               name: cql
             - containerPort: {{ .Values.scylla.service.ports.jmx }}
               name: jmx
+          {{- if .Values.scylla.developerMode }}
           env:
             - name: SCYLLA_DEVELOPER_MODE
-              value: "{{ ternary "1" "0" .Values.scylla.developerMode }}"
+              value: "1"
+          {{- end }}
           volumeMounts:
             - name: data
-              mountPath: /var/lib/scylla
-          {{- if .Values.scylla.lifecycle.createKeyspace.enabled }}
-          lifecycle:
-            postStart:
-              exec:
-                command:
-                  - /bin/sh
-                  - -c
-                  - |
-                    until cqlsh -e "DESCRIBE KEYSPACES" >/dev/null 2>&1; do
-                      echo "Waiting for Scylla to become available..."
-                      sleep 5
-                    done
-                    cqlsh -e "CREATE KEYSPACE IF NOT EXISTS {{ .Values.scylla.lifecycle.createKeyspace.keyspace }} WITH replication = {'class': '{{ .Values.scylla.lifecycle.createKeyspace.replicationClass }}', 'replication_factor': {{ .Values.scylla.lifecycle.createKeyspace.replicationFactor }} };"
-          {{- end }}
+              mountPath: {{ .Values.scylla.dataMountPath }}
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - cqlsh -e "SELECT now() FROM system.local;"
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - cqlsh -e "SELECT now() FROM system.local;"
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           resources:
             {{- toYaml .Values.scylla.resources | nindent 12 }}
       {{- if not .Values.scylla.persistence.enabled }}

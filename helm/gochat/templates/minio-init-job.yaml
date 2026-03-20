@@ -1,0 +1,67 @@
+{{- if and .Values.minio.enabled .Values.minio.init.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gochat.fullname" . }}-minio-init
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "minio-init") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.minio.init.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "minio-init") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: minio-init
+          image: "{{ .Values.minio.init.image.repository }}:{{ .Values.minio.init.image.tag }}"
+          imagePullPolicy: {{ .Values.minio.init.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until mc alias set local http://{{ include "gochat.fullname" . }}-minio:{{ .Values.minio.service.apiPort }} "{{ .Values.minio.rootUser }}" "{{ .Values.minio.rootPassword }}"; do
+                sleep 2
+              done
+              mc mb --ignore-existing local/{{ .Values.minio.bucket }}
+              mc anonymous set download local/{{ .Values.minio.bucket }}
+              cat >/tmp/cors.xml <<'EOF'
+              <CORSConfiguration>
+                <CORSRule>
+                  <AllowedOrigin>*</AllowedOrigin>
+                  <AllowedMethod>GET</AllowedMethod>
+                  <AllowedMethod>HEAD</AllowedMethod>
+                  <AllowedMethod>PUT</AllowedMethod>
+                  <AllowedMethod>POST</AllowedMethod>
+                  <AllowedMethod>DELETE</AllowedMethod>
+                  <AllowedHeader>*</AllowedHeader>
+                  <ExposeHeader>ETag</ExposeHeader>
+                  <MaxAgeSeconds>3000</MaxAgeSeconds>
+                </CORSRule>
+              </CORSConfiguration>
+              EOF
+              mc cors set local/{{ .Values.minio.bucket }} /tmp/cors.xml
+          resources:
+            {{- toYaml .Values.minio.init.resources | nindent 12 }}
+      {{- with .Values.minio.init.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.minio.init.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.minio.init.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

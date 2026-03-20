@@ -1,0 +1,10 @@
+.generated/
+research/
+.gochat-deployer/
+bin/
+gochat-deployment.exe
+gochat-deployer
+.gochat-deployer/
+.tmp-*/
+
+*.exe

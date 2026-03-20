@@ -1,30 +1,114 @@
-# Docker Compose environment variables
+# Compose Inputs
 
-The Docker Compose stack relies on a mix of environment variables with sensible defaults and placeholders. Set them in an `.env` file next to `compose/docker-compose.yaml` or export them in your shell before running `docker compose`.
+`powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1` writes `.generated/compose/.env` and `.generated/compose/config/*.yaml`, runs `docker compose pull`, and then starts Compose.
 
-## Required variables
+The main operator inputs are:
 
-- `PUBLIC_WS_URL` – Public WebSocket endpoint served by Traefik. Use the externally reachable `wss://` or `https://` origin for the `/ws` route so the UI can establish realtime connections.
-- `PUBLIC_API_BASE_URL` – Public HTTPS endpoint for the REST API. The value must match the domain (and optional base path) exposed by Traefik for `/api/v1`.
-- `PUBLIC_BASE_PATH` – Base pathname where the UI is mounted. Defaults to `/`, but update it when serving the SPA from a subdirectory so client-side routing generates correct links.
+- deployment type: `compose`
+- storage mode: `minio` or `external`
+- base domain or explicit public hosts
+- secrets for auth, webhook JWT, PostgreSQL, etcd, and OpenSearch
+- external S3 endpoint and credentials when `external` storage is selected
+- image repository prefix and tag when you want something other than `ghcr.io/flameinthedark:*`
 
-## Optional variables
+## Rendered Host Variables
 
-- `GOCHAT_IMAGE_VARIANT` – Select the Docker tag (`latest` or `dev`) shared by the GoChat application containers.
-- `GOCHAT_UI_IMAGE` – Override the repository name for the SPA image while keeping the standard tag handling.
-- `SCYLLA_DEVELOPER_MODE` – Toggle Scylla developer mode (defaults to `1` to relax resource checks for local usage).
-- `PG_ADDRESS` – PostgreSQL connection string consumed by the migrations helper. Defaults to the internal Citus master service.
-- `CASSANDRA_ADDRESS` – ScyllaDB connection string for migrations. Defaults to the internal Scylla service with multi-statement support enabled.
-- `GOCHAT_MIGRATIONS_REPO` – Git repository cloned by the migrations job. Defaults to the upstream GoChat repository.
-- `GOCHAT_MIGRATIONS_BRANCH` – Branch checked out when fetching migrations. Defaults to `main`.
-- `OPENSEARCH_INITIAL_ADMIN_PASSWORD` – Bootstrap password for the OpenSearch distribution.
-- `OPENSEARCH_HOSTS` – Dashboard connection string targeting the OpenSearch service.
-- `DISABLE_SECURITY_DASHBOARDS_PLUGIN` – Disable the security plugin in the OpenSearch Dashboards container (defaults to `true`).
-- `COMPOSE_PROJECT_NAME` – Project name reused by the embedded Citus images to derive hostnames.
-- `COORDINATOR_EXTERNAL_PORT` – Host port mapped to the Citus coordinator Postgres service (defaults to `5432`).
-- `POSTGRES_USER` – Username used by Citus components and seeded in the database.
-- `POSTGRES_PASSWORD` – Password for the configured PostgreSQL user.
-- `POSTGRES_HOST_AUTH_METHOD` – Authentication strategy passed to the Postgres image (defaults to `trust` for local development).
-- `DOCKER_SOCK` – Path to the Docker socket mounted into the Citus membership manager (defaults to `/var/run/docker.sock`).
+The generated Compose env file includes:
 
-All variables not listed inherit the Compose default values baked into `compose/docker-compose.yaml`.
+- `APP_HOST`
+- `API_HOST`
+- `WS_HOST`
+- `STORAGE_HOST`
+- `MINIO_CONSOLE_HOST`
+- `OPENSEARCH_DASHBOARDS_PORT`
+- `OPENOBSERVE_PORT`
+- `OTEL_COLLECTOR_HEALTH_PORT`
+- `OTEL_COLLECTOR_FLUENTD_PORT`
+- `OTEL_COLLECTOR_GRPC_PORT`
+- `OTEL_COLLECTOR_HTTP_PORT`
+
+`API_HOST` and `WS_HOST` are aligned to `APP_HOST` so the router matches the upstream backend compose for the automated stack:
+
+- `/api/v1/*` on `APP_HOST`
+- `/ws/*` on `APP_HOST` with `/ws` stripped
+
+`APP_HOST`, `STORAGE_HOST`, and `MINIO_CONSOLE_HOST` must resolve to the deployment machine.
+
+By default, `APP_HOST` is the base domain itself. Example:
+
+- UI: `http://example.com`
+- API: `http://example.com/api/v1`
+- WS: `ws://example.com/ws/subscribe`
+
+SFU is not deployed by Compose. If you need voice, deploy SFU separately and point it at the generated webhook and etcd settings.
+
+## Storage Variables
+
+When bundled MinIO is enabled, the env file also carries:
+
+- `MINIO_ROOT_USER`
+- `MINIO_ROOT_PASSWORD`
+- `MINIO_BUCKET`
+
+When external S3 is selected, MinIO is not started and the generated service configs point directly at the external endpoint instead.
+
+## Images And Migrations
+
+Application containers default to the upstream GHCR images:
+
+- `ghcr.io/flameinthedark/gochat-api`
+- `ghcr.io/flameinthedark/gochat-auth`
+- `ghcr.io/flameinthedark/gochat-attachments`
+- `ghcr.io/flameinthedark/gochat-ws`
+- `ghcr.io/flameinthedark/gochat-webhook`
+- `ghcr.io/flameinthedark/gochat-indexer`
+- `ghcr.io/flameinthedark/gochat-embedder`
+- `ghcr.io/flameinthedark/gochat-react`
+
+Database migrations run from the vendored files in `helm/gochat/files/migrations/` with the pulled `migrate/migrate` image.
+
+The Compose stack also publishes OpenSearch Dashboards on `http://<host>:5601` by default. Override that with `OPENSEARCH_DASHBOARDS_PORT` in the generated env file if needed.
+
+The Compose stack also publishes OpenObserve on `http://<host>:5080` by default. Override that with `OPENOBSERVE_PORT` in the generated env file if needed.
+
+## Observability Variables
+
+Compose mirrors the upstream backend local observability model:
+
+- app services send traces and metrics to `http://otel-collector:4318`
+- Docker ships container logs through the Fluentd logging driver to `localhost:24224`
+- the collector forwards logs, traces, and metrics into OpenObserve
+
+The generated env file also includes:
+
+- `OPENOBSERVE_ROOT_EMAIL`
+- `OPENOBSERVE_ROOT_PASSWORD`
+- `OPENOBSERVE_ORG`
+- `OPENOBSERVE_BASIC_AUTH`
+- `OPENOBSERVE_LOG_STREAM`
+- `OPENOBSERVE_METRIC_STREAM`
+- `OPENOBSERVE_TRACE_STREAM`
+
+Collector endpoints exposed on the host:
+
+- health: `http://<host>:13133/`
+- OTLP gRPC: `<host>:4317`
+- OTLP HTTP: `http://<host>:4318`
+- Fluentd ingress for Docker logs: `<host>:24224`
+
+OpenObserve dashboards and alert bootstrap assets are vendored in this repo under `monitoring/openobserve/`.
+Apply them from the deployment repo root with `go run ./research/gochat/cmd/tools observability bootstrap --dashboard-dir ./monitoring/openobserve/bootstrap/dashboards --alerts-file ./monitoring/openobserve/bootstrap/alerts/alerts.seed.yaml ...`.
+
+## Service Config Files
+
+The deploy wrapper renders:
+
+- `api_config.yaml`
+- `auth_config.yaml`
+- `attachments_config.yaml`
+- `ws_config.yaml`
+- `webhook_config.yaml`
+- `indexer_config.yaml`
+- `embedder_config.yaml`
+
+These are mounted into the matching containers from `.generated/compose/config/`.

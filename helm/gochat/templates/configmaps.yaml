@@ -65,6 +65,21 @@ data:
 {{- end }}
 {{- end }}
 
+{{- if .Values.embedder.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-embedder-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "embedder") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.embedder.config }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
+
 {{- if .Values.attachments.enabled }}
 ---
 apiVersion: v1

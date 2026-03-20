@@ -13,6 +13,9 @@ cluster_keyspace: "gochat"
 # Nats
 # nats_conn_string: "nats://nats:4222"
 
+# Redis
+keydb: "keydb:6379"
+
 # S3
 s3_endpoint: "minio:9000"
 s3_access_key_id: "admin"

@@ -1,4 +1,18 @@
 {{- if .Values.ui.enabled }}
+{{- if .Values.ui.build.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-ui-nginx-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "ui") | nindent 4 }}
+data:
+  default.conf: |
+{{- with .Values.ui.build.nginxConfig }}
+{{ . | indent 4 }}
+{{- end }}
+---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -30,13 +44,25 @@ spec:
       labels:
         {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "ui") | nindent 8 }}
     spec:
-      containers:
-        - name: ui
-          image: "{{ .Values.ui.image.repository }}:{{ default .Values.global.imageVariant .Values.ui.image.tag }}"
-          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
-          ports:
-            - containerPort: {{ .Values.ui.service.port }}
-              name: http
+{{- if .Values.ui.build.enabled }}
+      initContainers:
+        - name: ui-source
+          image: "{{ .Values.ui.build.cloneImage.repository }}:{{ .Values.ui.build.cloneImage.tag }}"
+          imagePullPolicy: {{ .Values.ui.build.cloneImage.pullPolicy }}
+          command:
+            - sh
+            - -ec
+            - |
+              rm -rf /workspace/src-root/src
+              git clone {{ .Values.ui.build.repository | quote }} /workspace/src-root/src
+              cd /workspace/src-root/src
+              git checkout {{ .Values.ui.build.ref | quote }}
+          volumeMounts:
+            - name: ui-source
+              mountPath: /workspace/src-root
+        - name: ui-build
+          image: "{{ .Values.ui.build.buildImage.repository }}:{{ .Values.ui.build.buildImage.tag }}"
+          imagePullPolicy: {{ .Values.ui.build.buildImage.pullPolicy }}
 {{- if .Values.ui.env }}
           env:
 {{- range $key, $value := .Values.ui.env }}
@@ -44,8 +70,56 @@ spec:
               value: {{ $value | quote }}
 {{- end }}
 {{- end }}
+          command:
+            - sh
+            - -ec
+            - |
+              cd /workspace/src-root/src
+{{ with .Values.ui.build.command }}
+{{ . | indent 14 }}
+{{ end }}
+              rm -rf /workspace/dist/*
+              cp -R dist/. /workspace/dist/
+          volumeMounts:
+            - name: ui-source
+              mountPath: /workspace/src-root
+            - name: ui-dist
+              mountPath: /workspace/dist
+{{- end }}
+      containers:
+        - name: ui
+          image: "{{ .Values.ui.image.repository }}:{{ default .Values.global.imageVariant .Values.ui.image.tag }}"
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.ui.service.port }}
+              name: http
+{{- if and .Values.ui.env (not .Values.ui.build.enabled) }}
+          env:
+{{- range $key, $value := .Values.ui.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- if .Values.ui.build.enabled }}
+          volumeMounts:
+            - name: ui-dist
+              mountPath: /usr/share/nginx/html
+            - name: ui-nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+{{- end }}
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
+{{- if .Values.ui.build.enabled }}
+      volumes:
+        - name: ui-source
+          emptyDir: {}
+        - name: ui-dist
+          emptyDir: {}
+        - name: ui-nginx-config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-ui-nginx-config
+{{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

@@ -1,0 +1,51 @@
+{{- if and .Values.scylla.enabled .Values.scylla.lifecycle.createKeyspace.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gochat.fullname" . }}-scylla-keyspace
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "scylla-keyspace") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 12
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "scylla-keyspace") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: scylla-keyspace
+          image: "{{ .Values.scylla.image.repository }}:{{ .Values.scylla.image.tag }}"
+          imagePullPolicy: {{ .Values.scylla.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until cqlsh {{ include "gochat.fullname" . }}-scylla -e "DESCRIBE KEYSPACES" >/dev/null 2>&1; do
+                echo "Waiting for ScyllaDB to start..."
+                sleep 5
+              done
+              cqlsh {{ include "gochat.fullname" . }}-scylla -e "CREATE KEYSPACE IF NOT EXISTS {{ .Values.scylla.lifecycle.createKeyspace.keyspace }} WITH replication = {'class': '{{ .Values.scylla.lifecycle.createKeyspace.replicationClass }}', 'replication_factor': {{ .Values.scylla.lifecycle.createKeyspace.replicationFactor }} };"
+          resources:
+            {{- toYaml .Values.scylla.resources | nindent 12 }}
+      {{- with .Values.scylla.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scylla.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scylla.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
