@@ -1,27 +1,28 @@
-name: CI and Release
+name: Release
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
   release:
     types:
       - published
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build and publish
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
-    name: Test
+    name: Test Release Tag
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -67,7 +68,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -103,12 +104,10 @@ jobs:
           path: dist/gochat-deployer_${{ matrix.goos }}_${{ matrix.goarch }}.${{ matrix.archive_ext }}
           if-no-files-found: error
 
-  release:
-    name: Release
+  publish:
+    name: Publish Release Assets
     if: github.event_name == 'release'
     needs: build
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
