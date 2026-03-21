@@ -6,5 +6,5 @@ gochat-deployment.exe
 gochat-deployer
 .gochat-deployer/
 .tmp-*/
-
+.idea
 *.exe
