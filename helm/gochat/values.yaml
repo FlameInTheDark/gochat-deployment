@@ -990,6 +990,7 @@ rbac:
 ingress:
   enabled: false
   className: ""
+  proxyBodySize: 50m
   annotations: {}
   websocket:
     enabled: true

@@ -83,6 +83,7 @@ func TestRenderHelmValuesIncludesObservabilityAndWebsocketIngress(t *testing.T) 
 		`enabled: true`,
 		`value: "kubernetes"`,
 		`value: "http://gochat-otel-collector:4318"`,
+		`proxyBodySize: "50m"`,
 		`nginx.ingress.kubernetes.io/rewrite-target: /subscribe`,
 		`websocket:`,
 		`rootUserEmail: "ops@example.com"`,

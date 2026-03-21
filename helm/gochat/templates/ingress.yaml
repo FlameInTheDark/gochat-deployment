@@ -7,6 +7,9 @@ metadata:
   labels:
     {{- include "gochat.labels" . | nindent 4 }}
 {{- $annotations := dict -}}
+{{- if .Values.ingress.proxyBodySize -}}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/proxy-body-size" (.Values.ingress.proxyBodySize | toString) }}
+{{- end }}
 {{- if .Values.ingress.annotations -}}
   {{- range $key, $value := .Values.ingress.annotations }}
     {{- $_ := set $annotations $key $value }}

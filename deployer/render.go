@@ -486,6 +486,7 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 		"ingress:",
 		"  enabled: true",
 		fmt.Sprintf("  className: %q", prepared.IngressClassName),
+		`  proxyBodySize: "50m"`,
 		"  annotations: {}",
 		"  hosts:",
 		strings.Join(ingressHosts, "\n"),
