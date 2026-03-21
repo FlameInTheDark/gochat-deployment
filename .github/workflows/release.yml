@@ -1,28 +1,37 @@
 name: Release
 
 on:
-  release:
-    types:
-      - published
+  push:
+    branches:
+      - main
+      - master
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Tag to build and publish
-        required: true
-        type: string
 
 permissions:
   contents: write
 
 jobs:
-  test:
-    name: Test Release Tag
+  semantic_release:
+    name: Semantic Release
+    outputs:
+      released: ${{ steps.semantic_release.outputs.released }}
+      version: ${{ steps.semantic_release.outputs.version }}
+      git_tag: ${{ steps.semantic_release.outputs.git_tag }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install release tooling
+        run: npm ci
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -32,9 +41,17 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Run semantic-release
+        id: semantic_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/run-semantic-release.mjs
+
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
-    needs: test
+    if: needs.semantic_release.outputs.released == 'true'
+    needs: semantic_release
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -68,7 +85,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          ref: ${{ needs.semantic_release.outputs.git_tag }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -106,8 +123,10 @@ jobs:
 
   publish:
     name: Publish Release Assets
-    if: github.event_name == 'release'
-    needs: build
+    if: needs.semantic_release.outputs.released == 'true'
+    needs:
+      - semantic_release
+      - build
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
@@ -126,7 +145,7 @@ jobs:
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ needs.semantic_release.outputs.git_tag }}
           overwrite_files: true
           files: |
             dist/gochat-deployer_*.tar.gz
