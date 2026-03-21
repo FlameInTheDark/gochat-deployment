@@ -84,6 +84,7 @@ func TestRenderHelmValuesIncludesObservabilityAndWebsocketIngress(t *testing.T) 
 		`value: "kubernetes"`,
 		`value: "http://gochat-otel-collector:4318"`,
 		`nginx.ingress.kubernetes.io/rewrite-target: /subscribe`,
+		`websocket:`,
 		`rootUserEmail: "ops@example.com"`,
 		`rootUserPassword: "Complexpass#123"`,
 		`host: "observe.example.com"`,

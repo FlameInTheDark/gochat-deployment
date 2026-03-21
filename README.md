@@ -1,11 +1,11 @@
 # GoChat Deployment
 
-This repository deploys GoChat by pulling published images from:
+This repository deploys GoChat using:
 
 - backend: `https://github.com/FlameInTheDark/gochat`
 - frontend: `https://github.com/FlameInTheDark/gochat-react`
 
-It does not clone, build, or push those application repositories during deployment. The `research/` directory is reference material only.
+You do not need to prepare those application repositories manually before deploying. Compose uses published images, while Helm can render an in-cluster UI build from the frontend repo tag. The `research/` directory is reference material only.
 
 The primary entrypoint is the Go deployer binary. It embeds the Compose stack, Helm chart, and helper assets into a single executable. At render or deploy time it resolves the latest stable backend and frontend tags, then fetches backend migrations for the resolved backend tag so schema files stay aligned with the backend release.
 
@@ -113,6 +113,97 @@ Accessible wizard mode:
 ```bash
 GOCHAT_DEPLOYER_ACCESSIBLE=1 gochat-deployer
 ```
+
+## Deploy With The Deployer
+
+Recommended flow:
+
+1. Check the required tools for your target:
+
+```bash
+gochat-deployer check --deployment-type helm
+```
+
+```bash
+gochat-deployer check --deployment-type compose
+```
+
+2. Choose how you want to provide inputs:
+
+- interactive wizard: `gochat-deployer`
+- explicit CLI flags: `gochat-deployer render ...` or `gochat-deployer deploy ...`
+
+3. Preview the generated deployment first when you want to inspect it before applying:
+
+```bash
+gochat-deployer render \
+  --deployment-type helm \
+  --workspace-root ./.gochat-deployer/k8s \
+  --namespace gochat \
+  --release-name gochat \
+  --base-domain example.com \
+  --ingress-class-name nginx \
+  --tls-secret-name wildcard-example \
+  --openobserve-host observe.example.com \
+  --openobserve-root-email ops@example.com \
+  --openobserve-root-password 'StrongPassword123!' \
+  --storage-mode external \
+  --external-s3-endpoint https://s3.example.com \
+  --external-s3-public-base-url https://cdn.example.com/gochat \
+  --external-s3-access-key-id ACCESS_KEY \
+  --external-s3-secret-access-key SECRET_KEY \
+  --email-provider resend \
+  --resend-api-key RESEND_API_KEY
+```
+
+`render` writes the generated bundle under `--workspace-root`, prints the exact `helm upgrade --install` or `docker compose` command to run manually, and refreshes `.generated/deployment-guide.md` with URLs, credentials, and follow-up steps.
+
+4. Apply the deployment directly when you are ready:
+
+```bash
+gochat-deployer deploy \
+  --deployment-type helm \
+  --workspace-root ./.gochat-deployer/k8s \
+  --namespace gochat \
+  --release-name gochat \
+  --base-domain example.com \
+  --ingress-class-name nginx \
+  --tls-secret-name wildcard-example \
+  --openobserve-host observe.example.com \
+  --openobserve-root-email ops@example.com \
+  --openobserve-root-password 'StrongPassword123!' \
+  --storage-mode external \
+  --external-s3-endpoint https://s3.example.com \
+  --external-s3-public-base-url https://cdn.example.com/gochat \
+  --external-s3-access-key-id ACCESS_KEY \
+  --external-s3-secret-access-key SECRET_KEY \
+  --email-provider resend \
+  --resend-api-key RESEND_API_KEY
+```
+
+For a single-host deployment with bundled storage:
+
+```bash
+gochat-deployer deploy \
+  --deployment-type compose \
+  --workspace-root ./.gochat-deployer/compose \
+  --base-domain example.com \
+  --storage-mode minio \
+  --openobserve-root-email ops@example.com \
+  --openobserve-root-password 'StrongPassword123!' \
+  --email-provider resend \
+  --resend-api-key RESEND_API_KEY
+```
+
+What the deployer does for you:
+
+- resolves backend and frontend tags when you do not pin them explicitly
+- fetches backend migrations for the backend tag that will be deployed
+- renders the Compose or Helm workspace
+- writes `.generated/deployment-guide.md` with service URLs, credentials, commands, and the SFU playbook
+- runs `docker compose up -d` or `helm upgrade --install` when you use `deploy`
+
+Use `render` when you want reviewable output first. Use `deploy` when you want the deployer to apply the generated configuration immediately.
 
 ## Deployment Modes
 

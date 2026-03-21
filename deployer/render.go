@@ -541,6 +541,7 @@ func renderHelmWebsocketIngressBlock(prepared *preparedOptions) string {
 			`      nginx.ingress.kubernetes.io/proxy-http-version: "1.1"`,
 			`      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"`,
 			`      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"`,
+			`      nginx.ingress.kubernetes.io/rewrite-target: /subscribe`,
 		)
 	} else {
 		lines = append(lines, "    annotations: {}")

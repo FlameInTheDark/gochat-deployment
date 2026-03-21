@@ -1,13 +1,20 @@
 {{- if and .Values.ingress.enabled .Values.ws.enabled (not .Values.traefik.enabled) .Values.ingress.websocket.enabled }}
+{{- $annotations := dict }}
+{{- with .Values.ingress.websocket.annotations }}
+{{- $annotations = merge $annotations . }}
+{{- end }}
+{{- if and (eq (lower (default "" .Values.ingress.className)) "nginx") (ne .Values.ingress.websocket.path "/subscribe") }}
+{{- $_ := set $annotations "nginx.ingress.kubernetes.io/rewrite-target" "/subscribe" }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "gochat.fullname" . }}-ws
   labels:
     {{- include "gochat.labels" . | nindent 4 }}
-{{- if .Values.ingress.websocket.annotations }}
+{{- if $annotations }}
   annotations:
-    {{- toYaml .Values.ingress.websocket.annotations | nindent 4 }}
+    {{- toYaml $annotations | nindent 4 }}
 {{- end }}
 spec:
 {{- if .Values.ingress.className }}
