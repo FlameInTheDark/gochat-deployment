@@ -29,39 +29,17 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-        - name: postgres-migrations
-          image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag }}"
-          imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
-          args:
-            - -path=/migrations/postgres
-            - -database={{ default $defaultPg .Values.migrations.pgAddress }}
-            - up
-          volumeMounts:
-            - name: postgres-migrations
-              mountPath: /migrations/postgres
-          resources:
-            {{- toYaml .Values.migrations.resources | nindent 12 }}
       containers:
-        - name: cassandra-migrations
+        - name: migrations
           image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag }}"
           imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
-          args:
-            - -path=/migrations/cassandra
-            - -database={{ default $defaultCassandra .Values.migrations.cassandraAddress }}
-            - up
-          volumeMounts:
-            - name: cassandra-migrations
-              mountPath: /migrations/cassandra
+          env:
+            - name: PG_ADDRESS
+              value: {{ default $defaultPg .Values.migrations.pgAddress | quote }}
+            - name: CASSANDRA_ADDRESS
+              value: {{ default $defaultCassandra .Values.migrations.cassandraAddress | quote }}
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
-      volumes:
-        - name: postgres-migrations
-          configMap:
-            name: {{ include "gochat.fullname" . }}-postgres-migrations
-        - name: cassandra-migrations
-          configMap:
-            name: {{ include "gochat.fullname" . }}-cassandra-migrations
       {{- with .Values.migrations.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

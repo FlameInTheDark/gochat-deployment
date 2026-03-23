@@ -9,7 +9,7 @@ Upstream application repositories:
 - backend: `https://github.com/FlameInTheDark/gochat`
 - frontend: `https://github.com/FlameInTheDark/gochat-react`
 
-You do not need to prepare those repositories manually before deploying. The deployer resolves backend and frontend versions, fetches backend migrations for the selected backend tag, and generates a ready-to-apply workspace.
+You do not need to prepare those repositories manually before deploying. The deployer resolves backend and frontend versions, selects the matching migrations container, and generates a ready-to-apply workspace.
 
 ## Highlights
 
@@ -17,7 +17,7 @@ You do not need to prepare those repositories manually before deploying. The dep
 - Docker Compose for single-host installs
 - Helm for Kubernetes installs
 - Automatic backend and frontend tag resolution
-- Backend migrations fetched to match the deployed backend release
+- Version-matched `gochat-migrations` container for deploy and update flows
 - Built-in OpenObserve and OpenTelemetry Collector wiring
 - Generated `.generated/deployment-guide.md` with URLs, commands, credentials, and SFU instructions
 
@@ -212,7 +212,7 @@ Inside the selected workspace root, the deployer writes:
 
 - the embedded Compose or Helm bundle
 - rendered service configs and environment files
-- backend migrations matching the deployed backend tag
+- a migrations image reference that matches the deployed backend release by default
 - exact manual deployment commands
 - `.generated/deployment-guide.md`
 
@@ -234,7 +234,7 @@ The generated guide contains:
 - Compose exposes OpenSearch Dashboards on `${OPENSEARCH_DASHBOARDS_PORT:-5601}`.
 - Compose also includes the upstream local observability path: OpenObserve on `${OPENOBSERVE_PORT:-5080}` and OTEL collector ports and health endpoints.
 - Vendored OpenObserve dashboard and alert assets live under `monitoring/openobserve/`.
-- `render` and `deploy` require GitHub access to resolve release tags and fetch backend migrations. Set `GITHUB_TOKEN` or `GH_TOKEN` if you need authenticated GitHub API access.
+- `render` and `deploy` need GitHub access only when backend or frontend tags are omitted and the deployer has to resolve the latest releases. Set `GITHUB_TOKEN` or `GH_TOKEN` if you need authenticated GitHub API access.
 - SFU is intentionally not deployed automatically. The deployer generates the credentials and instructions you need to deploy it separately.
 
 ## Documentation

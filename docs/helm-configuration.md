@@ -53,6 +53,7 @@ Example app endpoints for `example.com`:
 The generated override file pins:
 
 - image repository and tag for every application container
+- the migrations container image, which defaults to `gochat-migrations:<backend-tag>`
 - `routing.appHost`
 - rendered config blocks for API/auth/attachments/ws/webhook/indexer/embedder
 - PostgreSQL, etcd, and OpenSearch secrets

@@ -191,14 +191,10 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 	composeGeneratedRoot := filepath.Join(prepared.WorkspaceRoot, ".generated", "compose")
 	composeConfigRoot := filepath.Join(composeGeneratedRoot, "config")
 	helmGeneratedRoot := filepath.Join(prepared.WorkspaceRoot, ".generated", "helm")
-	workspaceMigrationsRoot := filepath.Join(prepared.WorkspaceRoot, "helm", "gochat", "files", "migrations")
-	for _, dir := range []string{composeGeneratedRoot, composeConfigRoot, helmGeneratedRoot, workspaceMigrationsRoot} {
+	for _, dir := range []string{composeGeneratedRoot, composeConfigRoot, helmGeneratedRoot} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return RenderResult{}, fmt.Errorf("create generated dir %s: %w", dir, err)
 		}
-	}
-	if err := e.syncMigrations(ctx, prepared.backendTag, workspaceMigrationsRoot); err != nil {
-		return RenderResult{}, err
 	}
 
 	composeConfigs, helmValues := e.renderOutputs(prepared)
@@ -231,7 +227,7 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 		HelmValuesPath:    helmValuesPath,
 		BackendTag:        prepared.backendTag,
 		FrontendTag:       prepared.frontendTag,
-		MigrationsTag:     prepared.backendTag,
+		MigrationsTag:     prepared.MigrationsImageTag,
 		AppPublicURL:      prepared.appPublicURL,
 		APIPublicBaseURL:  prepared.apiPublicBaseURL,
 		WSPublicURL:       prepared.wsPublicURL,
@@ -341,12 +337,6 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	if opts.ImageRepositoryPrefix == "" {
 		opts.ImageRepositoryPrefix = "ghcr.io/flameinthedark"
 	}
-	if opts.MigrationsImageRepo == "" {
-		opts.MigrationsImageRepo = "migrate/migrate"
-	}
-	if opts.MigrationsImageTag == "" {
-		opts.MigrationsImageTag = "v4.18.3"
-	}
 	if opts.StorageBucket == "" {
 		opts.StorageBucket = "gochat"
 	}
@@ -366,6 +356,8 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	opts.OpenObserveRootEmail = strings.TrimSpace(opts.OpenObserveRootEmail)
 	opts.BackendTag = strings.TrimSpace(opts.BackendTag)
 	opts.FrontendTag = strings.TrimSpace(opts.FrontendTag)
+	opts.MigrationsImageRepo = strings.TrimSpace(opts.MigrationsImageRepo)
+	opts.MigrationsImageTag = strings.TrimSpace(opts.MigrationsImageTag)
 	if opts.SMTPPort == 0 {
 		opts.SMTPPort = 2525
 	}
@@ -441,6 +433,12 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 			return nil, err
 		}
 		opts.FrontendTag = resolvedTag
+	}
+	if opts.MigrationsImageRepo == "" {
+		opts.MigrationsImageRepo = imageRepository(imageRef(opts.ImageRepositoryPrefix, "migrations", opts.BackendTag))
+	}
+	if opts.MigrationsImageTag == "" {
+		opts.MigrationsImageTag = opts.BackendTag
 	}
 
 	switch opts.StorageMode {

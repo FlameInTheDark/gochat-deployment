@@ -117,12 +117,6 @@ func newWizardState(seed Options) wizardState {
 	if state.ImageRepositoryPrefix == "" {
 		state.ImageRepositoryPrefix = "ghcr.io/flameinthedark"
 	}
-	if state.MigrationsImageRepo == "" {
-		state.MigrationsImageRepo = "migrate/migrate"
-	}
-	if state.MigrationsImageTag == "" {
-		state.MigrationsImageTag = "v4.18.3"
-	}
 	if state.StorageBucket == "" {
 		state.StorageBucket = "gochat"
 	}

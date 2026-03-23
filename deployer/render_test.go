@@ -39,6 +39,7 @@ func TestRenderHelmValuesIncludesFrontendURLs(t *testing.T) {
 		`VITE_BASE_PATH: "/"`,
 		`repository: https://github.com/FlameInTheDark/gochat-react.git`,
 		`ref: "v2.3.4"`,
+		"migrations:\n  image:\n    repository: ghcr.io/flameinthedark/gochat-migrations\n    tag: \"v1.2.3\"",
 	} {
 		if !strings.Contains(values, expected) {
 			t.Fatalf("rendered values missing %q", expected)
@@ -211,9 +212,35 @@ func TestRenderComposeEnvIncludesObservabilityValues(t *testing.T) {
 		"OPENOBSERVE_LOG_STREAM=gochat_logs",
 		"OPENOBSERVE_METRIC_STREAM=gochat-metrics",
 		"OPENOBSERVE_TRACE_STREAM=gochat_traces",
+		"GOCHAT_IMAGE_MIGRATIONS=ghcr.io/flameinthedark/gochat-migrations:v1.2.3",
 	} {
 		if !strings.Contains(env, expected) {
 			t.Fatalf("rendered compose env missing %q", expected)
 		}
+	}
+}
+
+func TestPrepareOptionsDefaultsMigrationsImageToBackendTag(t *testing.T) {
+	engine := NewEngine(nil)
+
+	prepared, err := engine.prepareOptions(context.Background(), withTestOpenObserve(Options{
+		DeploymentType: DeploymentHelm,
+		StorageMode:    StorageMinIO,
+		BaseDomain:     "example.com",
+		BackendTag:     "v1.2.3",
+		FrontendTag:    "v2.3.4",
+	}))
+	if err != nil {
+		t.Fatalf("prepareOptions returned error: %v", err)
+	}
+
+	if prepared.MigrationsImageRepo != "ghcr.io/flameinthedark/gochat-migrations" {
+		t.Fatalf("unexpected migrations repository: %s", prepared.MigrationsImageRepo)
+	}
+	if prepared.MigrationsImageTag != "v1.2.3" {
+		t.Fatalf("unexpected migrations tag: %s", prepared.MigrationsImageTag)
+	}
+	if prepared.imageMigrations != "ghcr.io/flameinthedark/gochat-migrations:v1.2.3" {
+		t.Fatalf("unexpected migrations image ref: %s", prepared.imageMigrations)
 	}
 }

@@ -148,7 +148,9 @@ If `--backend-tag` is omitted, the deployer resolves the latest stable tag from 
 
 If `--frontend-tag` is omitted, the deployer resolves the latest stable tag from `FlameInTheDark/gochat-react`.
 
-Backend migrations are fetched from `FlameInTheDark/gochat` for the resolved backend tag during `render` and `deploy`.
+If `--migrations-image-repository` is omitted, the deployer uses `<image-repository-prefix>/gochat-migrations`.
+
+If `--migrations-image-tag` is omitted, the deployer matches the migrations image tag to the resolved backend tag.
 
 ### Secrets
 

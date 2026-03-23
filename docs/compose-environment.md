@@ -65,7 +65,7 @@ Application containers default to the upstream GHCR images:
 - `ghcr.io/flameinthedark/gochat-embedder`
 - `ghcr.io/flameinthedark/gochat-react`
 
-Database migrations run from the vendored files in `helm/gochat/files/migrations/` with the pulled `migrate/migrate` image.
+Database migrations run from the pulled `ghcr.io/<owner>/gochat-migrations:<backend-tag>` image by default. The generated env file provides `PG_ADDRESS` and `CASSANDRA_ADDRESS`, and the Compose stack runs a single `migrations` container before the application services start.
 
 The Compose stack also publishes OpenSearch Dashboards on `http://<host>:5601` by default. Override that with `OPENSEARCH_DASHBOARDS_PORT` in the generated env file if needed.
 

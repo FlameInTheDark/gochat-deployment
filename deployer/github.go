@@ -7,9 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,13 +20,6 @@ type gitHubRepo struct {
 
 type gitHubTag struct {
 	Name string `json:"name"`
-}
-
-type gitHubContentItem struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Type        string `json:"type"`
-	DownloadURL string `json:"download_url"`
 }
 
 type stableSemver struct {
@@ -117,61 +108,6 @@ func (e *Engine) resolveLatestStableTag(ctx context.Context, repo gitHubRepo) (s
 		return "", fmt.Errorf("no stable semver tags found for %s/%s", repo.Owner, repo.Name)
 	}
 	return best.Raw, nil
-}
-
-func (e *Engine) syncMigrations(ctx context.Context, backendTag, migrationsRoot string) error {
-	if err := e.syncMigrationDir(ctx, e.backendRepo, backendTag, "db/postgres", filepath.Join(migrationsRoot, "postgres")); err != nil {
-		return err
-	}
-	if err := e.syncMigrationDir(ctx, e.backendRepo, backendTag, "db/cassandra", filepath.Join(migrationsRoot, "cassandra")); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (e *Engine) syncMigrationDir(ctx context.Context, repo gitHubRepo, ref, sourceDir, targetDir string) error {
-	baseURL := strings.TrimRight(e.githubAPIBaseURL, "/")
-	url := fmt.Sprintf("%s/repos/%s/%s/contents/%s?ref=%s", baseURL, repo.Owner, repo.Name, sourceDir, ref)
-
-	var items []gitHubContentItem
-	if err := e.getJSON(ctx, url, &items); err != nil {
-		return fmt.Errorf("list %s at %s: %w", sourceDir, ref, err)
-	}
-
-	files := make([]gitHubContentItem, 0, len(items))
-	for _, item := range items {
-		if item.Type != "file" || strings.TrimSpace(item.DownloadURL) == "" {
-			continue
-		}
-		files = append(files, item)
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("no migration files found in %s at %s", sourceDir, ref)
-	}
-
-	slices.SortFunc(files, func(left, right gitHubContentItem) int {
-		return strings.Compare(left.Name, right.Name)
-	})
-
-	if err := os.RemoveAll(targetDir); err != nil {
-		return fmt.Errorf("reset migration dir %s: %w", targetDir, err)
-	}
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return fmt.Errorf("create migration dir %s: %w", targetDir, err)
-	}
-
-	for _, file := range files {
-		data, err := e.getBytes(ctx, file.DownloadURL)
-		if err != nil {
-			return fmt.Errorf("download migration %s: %w", file.Path, err)
-		}
-		targetPath := filepath.Join(targetDir, file.Name)
-		if err := os.WriteFile(targetPath, data, 0o644); err != nil {
-			return fmt.Errorf("write migration %s: %w", targetPath, err)
-		}
-	}
-
-	return nil
 }
 
 func (e *Engine) getJSON(ctx context.Context, url string, target any) error {

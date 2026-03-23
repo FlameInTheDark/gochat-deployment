@@ -128,9 +128,11 @@ func runWizard(ctx context.Context, engine *Engine, seed Options) error {
 				Value(&state.FrontendTag),
 			huh.NewInput().
 				Title("Migrations Image Repository").
+				Description("Leave blank to use <image-repository-prefix>/gochat-migrations.").
 				Value(&state.MigrationsImageRepo),
 			huh.NewInput().
 				Title("Migrations Image Tag").
+				Description("Leave blank to match the resolved backend tag.").
 				Value(&state.MigrationsImageTag),
 		).Title("Images"),
 		huh.NewGroup(
@@ -319,7 +321,7 @@ func reviewText(prepared *preparedOptions, report CheckReport) string {
 		fmt.Sprintf("Workspace: %s", prepared.WorkspaceRoot),
 		fmt.Sprintf("Backend Tag: %s", prepared.backendTag),
 		fmt.Sprintf("Frontend Tag: %s", prepared.frontendTag),
-		fmt.Sprintf("Migrations Tag: %s", prepared.backendTag),
+		fmt.Sprintf("Migrations Tag: %s", prepared.MigrationsImageTag),
 		fmt.Sprintf("UI: %s", prepared.appPublicURL),
 		fmt.Sprintf("API: %s", prepared.apiPublicBaseURL),
 		fmt.Sprintf("WebSocket: %s", prepared.wsPublicURL),

@@ -169,6 +169,7 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		"",
 		"## Notes",
 		"",
+		"- Schema migrations run from the version-matched `gochat-migrations` image by default.",
 		"- OpenObserve bootstrap assets live in `monitoring/openobserve/`.",
 	)
 	if prepared.DeploymentType == DeploymentHelm {

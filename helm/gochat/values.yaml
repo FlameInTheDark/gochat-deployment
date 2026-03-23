@@ -860,8 +860,8 @@ ui:
 migrations:
   enabled: true
   image:
-    repository: migrate/migrate
-    tag: v4.18.3
+    repository: ghcr.io/flameinthedark/gochat-migrations
+    tag: v1.9.0
     pullPolicy: IfNotPresent
   pgAddress: ""
   cassandraAddress: ""

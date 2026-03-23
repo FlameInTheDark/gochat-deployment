@@ -59,9 +59,7 @@ services:
         condition: service_started
       citus-master:
         condition: service_healthy
-      migrations-postgres:
-        condition: service_completed_successfully
-      migrations-cassandra:
+      migrations:
         condition: service_completed_successfully
     labels:
       - traefik.enable=true
@@ -90,9 +88,7 @@ services:
         condition: service_started
       etcd:
         condition: service_started
-      migrations-postgres:
-        condition: service_completed_successfully
-      migrations-cassandra:
+      migrations:
         condition: service_completed_successfully
     labels:
       - traefik.enable=true
@@ -117,9 +113,7 @@ services:
         condition: service_started
       citus-master:
         condition: service_healthy
-      migrations-postgres:
-        condition: service_completed_successfully
-      migrations-cassandra:
+      migrations:
         condition: service_completed_successfully
     labels:
       - traefik.enable=true
@@ -144,9 +138,7 @@ services:
         condition: service_started
       citus-master:
         condition: service_healthy
-      migrations-postgres:
-        condition: service_completed_successfully
-      migrations-cassandra:
+      migrations:
         condition: service_completed_successfully
     labels:
       - traefik.enable=true
@@ -173,9 +165,7 @@ services:
         condition: service_started
       etcd:
         condition: service_started
-      migrations-postgres:
-        condition: service_completed_successfully
-      migrations-cassandra:
+      migrations:
         condition: service_completed_successfully
     labels:
       - traefik.enable=true
@@ -211,33 +201,17 @@ services:
         condition: service_started
       keydb:
         condition: service_started
-      migrations-postgres:
-        condition: service_completed_successfully
-      migrations-cassandra:
+      migrations:
         condition: service_completed_successfully
 
-  migrations-postgres:
+  migrations:
     image: ${GOCHAT_IMAGE_MIGRATIONS}
-    command:
-      - -path=/migrations/postgres
-      - -database=${PG_ADDRESS:-postgres://postgres:postgres@citus-master:5432/gochat?sslmode=disable}
-      - up
-    volumes:
-      - ../helm/gochat/files/migrations/postgres:/migrations/postgres:ro
+    environment:
+      PG_ADDRESS: ${PG_ADDRESS:-postgres://postgres:postgres@citus-master:5432/gochat?sslmode=disable}
+      CASSANDRA_ADDRESS: ${CASSANDRA_ADDRESS:-cassandra://scylla:9042/gochat?x-multi-statement=true}
     depends_on:
       citus-init:
         condition: service_completed_successfully
-    restart: on-failure
-
-  migrations-cassandra:
-    image: ${GOCHAT_IMAGE_MIGRATIONS}
-    command:
-      - -path=/migrations/cassandra
-      - -database=${CASSANDRA_ADDRESS:-cassandra://scylla:9042/gochat?x-multi-statement=true}
-      - up
-    volumes:
-      - ../helm/gochat/files/migrations/cassandra:/migrations/cassandra:ro
-    depends_on:
       scylla:
         condition: service_healthy
     restart: on-failure
