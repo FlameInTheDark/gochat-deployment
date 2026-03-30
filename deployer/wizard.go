@@ -49,6 +49,10 @@ func runWizard(ctx context.Context, engine *Engine, seed Options) error {
 				Description("Leave blank to use the base domain directly.").
 				Value(&state.AppHost),
 			huh.NewInput().
+				Title("Telemetry Host Override").
+				Description("Leave blank for telemetry.<domain>.").
+				Value(&state.TelemetryHost),
+			huh.NewInput().
 				Title("Storage Host Override").
 				Description("Leave blank for storage.<domain>.").
 				Value(&state.StorageHost),
@@ -325,6 +329,7 @@ func reviewText(prepared *preparedOptions, report CheckReport) string {
 		fmt.Sprintf("UI: %s", prepared.appPublicURL),
 		fmt.Sprintf("API: %s", prepared.apiPublicBaseURL),
 		fmt.Sprintf("WebSocket: %s", prepared.wsPublicURL),
+		fmt.Sprintf("Telemetry: %s", prepared.telemetryPublicURL),
 		fmt.Sprintf("Email Provider: %s", prepared.EmailProvider),
 	}
 	if prepared.storagePublicBaseURL != "" {

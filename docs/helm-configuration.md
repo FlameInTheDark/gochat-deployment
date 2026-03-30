@@ -37,16 +37,18 @@ The Helm deployment is configured to match the upstream backend compose router:
 
 - `<domain>/api/v1/*`
 - `<domain>/ws/*`
+- `telemetry.<domain>/*`
 
 When bundled Traefik is enabled, the chart creates the strip-prefix resources needed for `/ws`. If you use another ingress controller, you need to reproduce that rewrite behavior yourself.
 
-SFU is intentionally excluded from the Helm chart. If you need voice, deploy SFU separately with the required direct networking and reuse the automated `webhook` plus `etcd` components for registration.
+SFU is intentionally excluded from the Helm chart. If you need voice, deploy SFU separately with the required direct networking and reuse the automated `webhook`, `etcd`, and telemetry gateway components for registration plus observability.
 
 Example app endpoints for `example.com`:
 
 - UI: `https://example.com`
 - API: `https://example.com/api/v1`
 - WS: `wss://example.com/ws`
+- Telemetry Gateway: `https://telemetry.example.com`
 
 ## Values Rendered By The Wrapper
 
@@ -55,7 +57,9 @@ The generated override file pins:
 - image repository and tag for every application container
 - the migrations container image, which defaults to `gochat-migrations:<backend-tag>`
 - `routing.appHost`
+- shared OTEL app env, including `OTEL_METRIC_EXPORT_INTERVAL=60000`
 - rendered config blocks for API/auth/attachments/ws/webhook/indexer/embedder
+- rendered telemetry gateway image, config, and ingress host
 - PostgreSQL, etcd, and OpenSearch secrets
 - ingress host rules for app, storage, and MinIO console
 - MinIO credentials and bucket settings when enabled

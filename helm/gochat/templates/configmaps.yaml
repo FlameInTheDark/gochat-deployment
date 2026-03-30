@@ -18,6 +18,10 @@ data:
 {{- with .Values.auth.passwordResetTemplate }}
 {{ . | indent 4 }}
 {{- end }}
+  mfa_recovery.tmpl: |
+{{- with .Values.auth.mfaRecoveryTemplate }}
+{{ . | indent 4 }}
+{{- end }}
 {{- end }}
 
 {{- if .Values.api.enabled }}
@@ -76,6 +80,21 @@ metadata:
 data:
   config.yaml: |
 {{- with .Values.embedder.config }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
+
+{{- if and .Values.observability.enabled .Values.observability.telemetryGateway.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-telemetry-gateway-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "telemetry-gateway") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.observability.telemetryGateway.config }}
 {{ . | indent 4 }}
 {{- end }}
 {{- end }}

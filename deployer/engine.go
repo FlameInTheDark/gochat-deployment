@@ -36,12 +36,14 @@ type preparedOptions struct {
 	appPublicURL         string
 	apiPublicBaseURL     string
 	wsPublicURL          string
+	telemetryPublicURL   string
 	storageEndpointURL   string
 	storagePublicBaseURL string
 	storageAccessKey     string
 	storageSecretKey     string
 	storageRegion        string
 	storageUseSSL        bool
+	telemetryAlias       string
 	storageAlias         string
 	minioConsoleAlias    string
 
@@ -68,6 +70,7 @@ type preparedOptions struct {
 	imageWebhook            string
 	imageIndexer            string
 	imageEmbedder           string
+	imageTelemetryGateway   string
 	imageUI                 string
 	imageMigrations         string
 }
@@ -218,19 +221,20 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 	fmt.Fprintf(output, "[gochat] Rendered bundle into %s\n", prepared.WorkspaceRoot)
 
 	result := RenderResult{
-		WorkspaceRoot:     prepared.WorkspaceRoot,
-		GeneratedRoot:     filepath.Join(prepared.WorkspaceRoot, ".generated"),
-		ComposeEnvPath:    composeEnvPath,
-		ComposeConfigRoot: composeConfigRoot,
-		ComposeFilePath:   filepath.Join(prepared.WorkspaceRoot, "compose", "docker-compose.yaml"),
-		HelmChartPath:     filepath.Join(prepared.WorkspaceRoot, "helm", "gochat"),
-		HelmValuesPath:    helmValuesPath,
-		BackendTag:        prepared.backendTag,
-		FrontendTag:       prepared.frontendTag,
-		MigrationsTag:     prepared.MigrationsImageTag,
-		AppPublicURL:      prepared.appPublicURL,
-		APIPublicBaseURL:  prepared.apiPublicBaseURL,
-		WSPublicURL:       prepared.wsPublicURL,
+		WorkspaceRoot:       prepared.WorkspaceRoot,
+		GeneratedRoot:       filepath.Join(prepared.WorkspaceRoot, ".generated"),
+		ComposeEnvPath:      composeEnvPath,
+		ComposeConfigRoot:   composeConfigRoot,
+		ComposeFilePath:     filepath.Join(prepared.WorkspaceRoot, "compose", "docker-compose.yaml"),
+		HelmChartPath:       filepath.Join(prepared.WorkspaceRoot, "helm", "gochat"),
+		HelmValuesPath:      helmValuesPath,
+		BackendTag:          prepared.backendTag,
+		FrontendTag:         prepared.frontendTag,
+		MigrationsTag:       prepared.MigrationsImageTag,
+		AppPublicURL:        prepared.appPublicURL,
+		APIPublicBaseURL:    prepared.apiPublicBaseURL,
+		WSPublicURL:         prepared.wsPublicURL,
+		TelemetryGatewayURL: prepared.telemetryPublicURL,
 	}
 	result.ComposeDeployCommand = composeDeployCommand(prepared, result)
 	result.HelmDeployCommand = helmDeployCommand(prepared, result)
@@ -382,6 +386,9 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	if opts.WSHost == "" {
 		opts.WSHost = opts.AppHost
 	}
+	if opts.TelemetryHost == "" && opts.BaseDomain != "" {
+		opts.TelemetryHost = "telemetry." + opts.BaseDomain
+	}
 	if opts.StorageHost == "" && opts.BaseDomain != "" {
 		opts.StorageHost = "storage." + opts.BaseDomain
 	}
@@ -392,6 +399,7 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	opts.AppHost = normalizeHost(opts.AppHost)
 	opts.APIHost = opts.AppHost
 	opts.WSHost = opts.AppHost
+	opts.TelemetryHost = normalizeHost(opts.TelemetryHost)
 	opts.StorageHost = normalizeHost(opts.StorageHost)
 	opts.MinIOConsoleHost = normalizeHost(opts.MinIOConsoleHost)
 	opts.OpenObserveHost = normalizeHost(opts.OpenObserveHost)
@@ -407,6 +415,15 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 
 	if opts.AuthSecret == "" {
 		opts.AuthSecret = randomSecret(48)
+	}
+	opts.MFAEncryptionKey = strings.TrimSpace(opts.MFAEncryptionKey)
+	if opts.MFAEncryptionKey == "" {
+		opts.MFAEncryptionKey = randomBase64Bytes(32)
+	} else {
+		rawKey, err := base64.StdEncoding.DecodeString(opts.MFAEncryptionKey)
+		if err != nil || len(rawKey) != 32 {
+			return nil, fmt.Errorf("mfa encryption key must be a base64-encoded 32-byte key")
+		}
 	}
 	if opts.WebhookJWTSecret == "" {
 		opts.WebhookJWTSecret = randomSecret(48)
@@ -509,6 +526,9 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 
 	prepared.appPublicURL = fmt.Sprintf("%s://%s", prepared.httpScheme, prepared.AppHost)
 	prepared.apiPublicBaseURL = fmt.Sprintf("%s://%s/api/v1", prepared.httpScheme, prepared.AppHost)
+	if prepared.TelemetryHost != "" {
+		prepared.telemetryPublicURL = fmt.Sprintf("%s://%s", prepared.httpScheme, prepared.TelemetryHost)
+	}
 	wsPublicPath := "/ws/subscribe"
 	if prepared.DeploymentType == DeploymentHelm {
 		wsPublicPath = "/ws"
@@ -522,6 +542,7 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 		prepared.storageSecretKey = prepared.MinIORootPassword
 		prepared.storageRegion = ""
 		prepared.storageUseSSL = prepared.useTLS
+		prepared.telemetryAlias = prepared.TelemetryHost
 		prepared.storageAlias = prepared.StorageHost
 		prepared.minioConsoleAlias = prepared.MinIOConsoleHost
 	} else {
@@ -539,6 +560,7 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 		prepared.storageSecretKey = prepared.ExternalS3SecretAccessKey
 		prepared.storageRegion = prepared.ExternalS3Region
 		prepared.storageUseSSL = strings.HasPrefix(strings.ToLower(prepared.storageEndpointURL), "https://") || prepared.ExternalS3UseSSL
+		prepared.telemetryAlias = prepared.TelemetryHost
 		prepared.storageAlias = "storage.alias.internal.invalid"
 		prepared.minioConsoleAlias = "minio.alias.internal.invalid"
 	}
@@ -557,6 +579,7 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	prepared.imageWebhook = imageRef(prepared.ImageRepositoryPrefix, "webhook", prepared.backendTag)
 	prepared.imageIndexer = imageRef(prepared.ImageRepositoryPrefix, "indexer", prepared.backendTag)
 	prepared.imageEmbedder = imageRef(prepared.ImageRepositoryPrefix, "embedder", prepared.backendTag)
+	prepared.imageTelemetryGateway = imageRef(prepared.ImageRepositoryPrefix, "telemetry-gateway", prepared.backendTag)
 	prepared.imageUI = uiImageRef(prepared.ImageRepositoryPrefix, prepared.frontendTag)
 	prepared.imageMigrations = fmt.Sprintf("%s:%s", strings.TrimRight(prepared.MigrationsImageRepo, ":"), prepared.MigrationsImageTag)
 	prepared.composePGAddr = fmt.Sprintf("postgres://postgres:%s@citus-master:5432/gochat?sslmode=disable", prepared.PostgresPassword)
@@ -732,6 +755,17 @@ func randomSecret(length int) string {
 	}
 
 	return builder.String()
+}
+
+func randomBase64Bytes(length int) string {
+	if length <= 0 {
+		return ""
+	}
+	buf := make([]byte, length)
+	if _, err := rand.Read(buf); err != nil {
+		return base64.StdEncoding.EncodeToString([]byte(randomSecret(length)))
+	}
+	return base64.StdEncoding.EncodeToString(buf)
 }
 
 func randomStrongPassword(length int) string {

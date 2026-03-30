@@ -56,6 +56,7 @@ type Options struct {
 	AppHost          string
 	APIHost          string
 	WSHost           string
+	TelemetryHost    string
 	StorageHost      string
 	MinIOConsoleHost string
 	Namespace        string
@@ -74,6 +75,7 @@ type Options struct {
 	UseBundledTraefik     ToggleMode
 
 	AuthSecret              string
+	MFAEncryptionKey        string
 	WebhookJWTSecret        string
 	PostgresPassword        string
 	EtcdRootPassword        string
@@ -143,6 +145,7 @@ type RenderResult struct {
 	AppPublicURL         string
 	APIPublicBaseURL     string
 	WSPublicURL          string
+	TelemetryGatewayURL  string
 	StoragePublicURL     string
 	MinIOConsoleURL      string
 	OpenObserveURL       string
@@ -157,6 +160,9 @@ func (r RenderResult) SummaryLines() []string {
 		fmt.Sprintf("UI:        %s", r.AppPublicURL),
 		fmt.Sprintf("API:       %s", r.APIPublicBaseURL),
 		fmt.Sprintf("WebSocket: %s", r.WSPublicURL),
+	}
+	if r.TelemetryGatewayURL != "" {
+		lines = append(lines, fmt.Sprintf("Telemetry: %s", r.TelemetryGatewayURL))
 	}
 	if r.StoragePublicURL != "" {
 		lines = append(lines, fmt.Sprintf("Storage:   %s", r.StoragePublicURL))

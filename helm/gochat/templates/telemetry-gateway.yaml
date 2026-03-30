@@ -1,0 +1,70 @@
+{{- if and .Values.observability.enabled .Values.observability.telemetryGateway.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-telemetry-gateway
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "telemetry-gateway") | nindent 4 }}
+spec:
+  type: {{ .Values.observability.telemetryGateway.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.observability.telemetryGateway.service.port }}
+      targetPort: http
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "telemetry-gateway") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-telemetry-gateway
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "telemetry-gateway") | nindent 4 }}
+spec:
+  replicas: {{ .Values.observability.telemetryGateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "telemetry-gateway") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "telemetry-gateway") | nindent 8 }}
+    spec:
+      containers:
+        - name: telemetry-gateway
+          image: "{{ .Values.observability.telemetryGateway.image.repository }}:{{ default .Values.global.imageVariant .Values.observability.telemetryGateway.image.tag }}"
+          imagePullPolicy: {{ .Values.observability.telemetryGateway.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.observability.telemetryGateway.service.port }}
+              name: http
+{{- if .Values.observability.telemetryGateway.env }}
+          env:
+{{ toYaml .Values.observability.telemetryGateway.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /dist/config.yaml
+              subPath: config.yaml
+          resources:
+            {{- toYaml .Values.observability.telemetryGateway.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-telemetry-gateway-config
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.observability.telemetryGateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.observability.telemetryGateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.observability.telemetryGateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -52,6 +52,9 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		fmt.Sprintf("- API: `%s`", result.APIPublicBaseURL),
 		fmt.Sprintf("- WebSocket: `%s`", result.WSPublicURL),
 	)
+	if result.TelemetryGatewayURL != "" {
+		lines = append(lines, fmt.Sprintf("- Telemetry Gateway: `%s`", result.TelemetryGatewayURL))
+	}
 	if result.StoragePublicURL != "" {
 		lines = append(lines, fmt.Sprintf("- Storage: `%s`", result.StoragePublicURL))
 	}
@@ -88,6 +91,17 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		"",
 		fmt.Sprintf("- Compose env: `%s`", result.ComposeEnvPath),
 		fmt.Sprintf("- Compose config dir: `%s`", result.ComposeConfigRoot),
+		fmt.Sprintf("- API config: `%s`", filepath.Join(result.ComposeConfigRoot, "api_config.yaml")),
+		fmt.Sprintf("- Auth config: `%s`", filepath.Join(result.ComposeConfigRoot, "auth_config.yaml")),
+		fmt.Sprintf("- Auth email template: `%s`", filepath.Join(result.WorkspaceRoot, "compose", "templates", "email_notify.tmpl")),
+		fmt.Sprintf("- Auth password reset template: `%s`", filepath.Join(result.WorkspaceRoot, "compose", "templates", "password_reset.tmpl")),
+		fmt.Sprintf("- Auth MFA recovery template: `%s`", filepath.Join(result.WorkspaceRoot, "compose", "templates", "mfa_recovery.tmpl")),
+		fmt.Sprintf("- Attachments config: `%s`", filepath.Join(result.ComposeConfigRoot, "attachments_config.yaml")),
+		fmt.Sprintf("- WS config: `%s`", filepath.Join(result.ComposeConfigRoot, "ws_config.yaml")),
+		fmt.Sprintf("- Webhook config: `%s`", filepath.Join(result.ComposeConfigRoot, "webhook_config.yaml")),
+		fmt.Sprintf("- Indexer config: `%s`", filepath.Join(result.ComposeConfigRoot, "indexer_config.yaml")),
+		fmt.Sprintf("- Embedder config: `%s`", filepath.Join(result.ComposeConfigRoot, "embedder_config.yaml")),
+		fmt.Sprintf("- Telemetry gateway config: `%s`", filepath.Join(result.ComposeConfigRoot, "telemetry_gateway_config.yaml")),
 		fmt.Sprintf("- Compose file: `%s`", result.ComposeFilePath),
 		fmt.Sprintf("- Helm chart: `%s`", result.HelmChartPath),
 		fmt.Sprintf("- Helm values: `%s`", result.HelmValuesPath),
@@ -98,6 +112,7 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		"## Core Credentials",
 		"",
 		fmt.Sprintf("- Auth secret: `%s`", prepared.AuthSecret),
+		fmt.Sprintf("- MFA encryption key: `%s`", prepared.MFAEncryptionKey),
 		fmt.Sprintf("- Webhook JWT secret: `%s`", prepared.WebhookJWTSecret),
 		"- PostgreSQL user: `postgres`",
 		fmt.Sprintf("- PostgreSQL password: `%s`", prepared.PostgresPassword),
@@ -163,6 +178,27 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		lines = append(lines, fmt.Sprintf("- DashaMail API key: `%s`", prepared.DashaMailAPIKey))
 	}
 
+	lines = append(lines,
+		"",
+		"## Observability",
+		"",
+		fmt.Sprintf("- Telemetry gateway URL: `%s`", result.TelemetryGatewayURL),
+		fmt.Sprintf("- OTEL metric export interval: `%s`", defaultOTELMetricExportInterval),
+		fmt.Sprintf("- OpenObserve org: `%s`", prepared.openObserveOrg),
+		fmt.Sprintf("- Log stream: `%s`", prepared.openObserveLogStream),
+		fmt.Sprintf("- Metric stream: `%s`", prepared.openObserveMetricStream),
+		fmt.Sprintf("- Trace stream: `%s`", prepared.openObserveTraceStream),
+	)
+	if result.OpenObserveURL != "" {
+		lines = append(lines, fmt.Sprintf("- OpenObserve URL: `%s`", result.OpenObserveURL))
+	}
+	if prepared.DeploymentType == DeploymentCompose {
+		lines = append(lines,
+			"- Collector health endpoint: `http://<deploy-host>:13133/`",
+			"- Docker log ingress: `<deploy-host>:24224`",
+		)
+	}
+
 	lines = append(lines, renderSFUDeploymentSection(prepared, result)...)
 
 	lines = append(lines,
@@ -174,14 +210,14 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 	)
 	if prepared.DeploymentType == DeploymentHelm {
 		lines = append(lines,
-			"- Helm renders app OTEL env, an OpenObserve instance, and the collector by default.",
+			"- Helm renders app OTEL env, an OpenObserve instance, the collector, and the public telemetry gateway by default.",
 			"- Helm renders the public websocket endpoint as `/ws` and enables the alias ingress needed for ingress-nginx style setups.",
 			"- Helm renders the UI as an in-cluster build from the frontend repo tag instead of depending on a prebuilt UI image.",
 		)
 	} else {
 		lines = append(lines,
 			"- Compose keeps using the published frontend image, so the baked frontend env still matters there.",
-			"- Compose exposes OpenObserve on port `5080` and the collector health endpoint on port `13133` by default.",
+			"- Compose exposes OpenObserve on port `5080`, the telemetry gateway on its routed public host, and the collector health endpoint on port `13133` by default.",
 		)
 	}
 
@@ -189,10 +225,10 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 }
 
 func renderSFUDeploymentSection(prepared *preparedOptions, result RenderResult) []string {
-	observeBaseURL := sfuObserveBaseURL(prepared, result)
-	observeBaseValue := "<set-a-reachable-openobserve-url>"
-	if observeBaseURL != "" {
-		observeBaseValue = observeBaseURL
+	telemetryBaseURL := sfuTelemetryBaseURL(prepared, result)
+	telemetryBaseValue := "<set-a-reachable-telemetry-url>"
+	if telemetryBaseURL != "" {
+		telemetryBaseValue = telemetryBaseURL
 	}
 
 	lines := []string{
@@ -203,8 +239,10 @@ func renderSFUDeploymentSection(prepared *preparedOptions, result RenderResult) 
 		"- Expose the SFU over WSS at `/signal` for clients and keep `/admin/channel/close` reachable from the GoChat API/control plane if you want region-move and forced close flows to work.",
 		"- Choose an SFU region that matches the API allowlist currently rendered by this deployer: `global`, `eu`, or `us-east`.",
 		"- `webhook_url` should be the GoChat base origin, not the full heartbeat path. The current SFU code appends `/api/v1/webhook/sfu/heartbeat`, `/api/v1/webhook/sfu/voice/join`, and `/api/v1/webhook/sfu/voice/leave` itself.",
+		"- Reuse the same SFU JWT for heartbeat auth and OTLP auth: `Authorization=Bearer <same-jwt>`.",
 		fmt.Sprintf("- GoChat base origin for SFU callbacks: `%s`", result.AppPublicURL),
 		fmt.Sprintf("- Expected heartbeat endpoint once configured: `%s/webhook/sfu/heartbeat`", result.APIPublicBaseURL),
+		fmt.Sprintf("- Telemetry gateway base URL for SFU OTLP HTTP: `%s`", telemetryBaseValue),
 		"- Discovery prefix already configured on the GoChat side: `/gochat/sfu`.",
 		"",
 		"### Build",
@@ -228,6 +266,10 @@ func renderSFUDeploymentSection(prepared *preparedOptions, result RenderResult) 
 		fmt.Sprintf("webhook_url: %q", result.AppPublicURL),
 		fmt.Sprintf("webhook_token: %q", prepared.sfuWebhookToken),
 		fmt.Sprintf("service_id: %q", prepared.sfuServiceID),
+		fmt.Sprintf("telemetry_otlp_endpoint: %q", telemetryBaseValue),
+		fmt.Sprintf("telemetry_otlp_headers: %q", "Authorization=Bearer "+prepared.sfuWebhookToken),
+		`telemetry_otlp_protocol: "http/protobuf"`,
+		fmt.Sprintf("telemetry_metric_export_interval: %q", defaultOTELMetricExportInterval),
 		"max_audio_bitrate_kbps: 0",
 		"enforce_audio_bitrate: false",
 		"audio_bitrate_margin_percent: 15",
@@ -243,14 +285,10 @@ func renderSFUDeploymentSection(prepared *preparedOptions, result RenderResult) 
 		fmt.Sprintf("$env:WEBHOOK_URL = %q", result.AppPublicURL),
 		fmt.Sprintf("$env:WEBHOOK_TOKEN = %q", prepared.sfuWebhookToken),
 		fmt.Sprintf("$env:AUTH_SECRET = %q", prepared.AuthSecret),
-		fmt.Sprintf("$env:OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = %q", observeBaseValue+"/api/"+prepared.openObserveOrg+"/v1/traces"),
-		fmt.Sprintf("$env:OTEL_EXPORTER_OTLP_TRACES_HEADERS = %q", "Authorization=Basic "+prepared.openObserveBasicAuth),
-		fmt.Sprintf("$env:OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = %q", observeBaseValue+"/api/"+prepared.openObserveOrg+"/v1/metrics"),
-		fmt.Sprintf("$env:OTEL_EXPORTER_OTLP_METRICS_HEADERS = %q", "Authorization=Basic "+prepared.openObserveBasicAuth),
-		`$env:OPENOBSERVE_LOGS_ENABLED = "true"`,
-		fmt.Sprintf("$env:OPENOBSERVE_LOGS_ENDPOINT = %q", observeBaseValue+"/api/"+prepared.openObserveOrg),
-		fmt.Sprintf("$env:OPENOBSERVE_LOGS_AUTH = %q", "Basic "+prepared.openObserveBasicAuth),
-		fmt.Sprintf("$env:OPENOBSERVE_LOGS_STREAM = %q", prepared.openObserveLogStream),
+		fmt.Sprintf("$env:OTEL_EXPORTER_OTLP_ENDPOINT = %q", telemetryBaseValue),
+		`$env:OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"`,
+		`$env:OTEL_EXPORTER_OTLP_HEADERS = "Authorization=Bearer $($env:WEBHOOK_TOKEN)"`,
+		fmt.Sprintf("$env:OTEL_METRIC_EXPORT_INTERVAL = %q", defaultOTELMetricExportInterval),
 		"```",
 		"",
 		"### Token Generation",
@@ -264,24 +302,21 @@ func renderSFUDeploymentSection(prepared *preparedOptions, result RenderResult) 
 		"",
 		"### Network Notes",
 		"",
-		"- Upstream docs require outbound access from the SFU host to the GoChat webhook origin and the OpenObserve OTLP/log ingestion endpoints.",
+		"- Upstream docs require outbound access from the SFU host to the GoChat webhook origin and the public telemetry gateway endpoint.",
 		"- STUN is configured by default. If your users are behind restrictive NAT, add TURN servers in `stun_servers` or your surrounding WebRTC config.",
 		"- Inference from the current `cmd/sfu` code: there is no configurable fixed RTP port-range setting today, so plan host/firewall rules for normal ICE/WebRTC candidate traffic instead of exposing only port `3300`.",
 	}
-	if observeBaseURL == "" {
+	if telemetryBaseURL == "" {
 		lines = append(lines,
-			"- OpenObserve is not published as a direct public URL in this render. Replace `<set-a-reachable-openobserve-url>` with a URL the external SFU host can actually reach.",
+			"- The telemetry gateway is not published as a direct public URL in this render. Replace `<set-a-reachable-telemetry-url>` with a URL the external SFU host can actually reach.",
 		)
 	}
 	return lines
 }
 
-func sfuObserveBaseURL(prepared *preparedOptions, result RenderResult) string {
-	if result.OpenObserveURL != "" {
-		return strings.TrimRight(result.OpenObserveURL, "/")
-	}
-	if prepared.DeploymentType == DeploymentCompose {
-		return fmt.Sprintf("http://%s:5080", prepared.AppHost)
+func sfuTelemetryBaseURL(_ *preparedOptions, result RenderResult) string {
+	if result.TelemetryGatewayURL != "" {
+		return strings.TrimRight(result.TelemetryGatewayURL, "/")
 	}
 	return ""
 }

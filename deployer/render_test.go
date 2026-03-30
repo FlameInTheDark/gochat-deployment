@@ -22,13 +22,14 @@ func TestRenderHelmValuesIncludesFrontendURLs(t *testing.T) {
 	}
 
 	configs := map[string]string{
-		"api":         "api-config",
-		"auth":        "auth-config",
-		"attachments": "attachments-config",
-		"ws":          "ws-config",
-		"webhook":     "webhook-config",
-		"indexer":     "indexer-config",
-		"embedder":    "embedder-config",
+		"api":              "api-config",
+		"auth":             "auth-config",
+		"attachments":      "attachments-config",
+		"ws":               "ws-config",
+		"webhook":          "webhook-config",
+		"indexer":          "indexer-config",
+		"embedder":         "embedder-config",
+		"telemetryGateway": "telemetry-gateway-config",
 	}
 
 	values := renderHelmValues(prepared, configs)
@@ -71,22 +72,29 @@ func TestRenderHelmValuesIncludesObservabilityAndWebsocketIngress(t *testing.T) 
 	}
 
 	values := renderHelmValues(prepared, map[string]string{
-		"api":         "api-config",
-		"auth":        "auth-config",
-		"attachments": "attachments-config",
-		"ws":          "ws-config",
-		"webhook":     "webhook-config",
-		"indexer":     "indexer-config",
-		"embedder":    "embedder-config",
+		"api":              "api-config",
+		"auth":             "auth-config",
+		"attachments":      "attachments-config",
+		"ws":               "ws-config",
+		"webhook":          "webhook-config",
+		"indexer":          "indexer-config",
+		"embedder":         "embedder-config",
+		"telemetryGateway": "telemetry-gateway-config",
 	})
 
 	for _, expected := range []string{
 		`enabled: true`,
 		`value: "kubernetes"`,
 		`value: "http://gochat-otel-collector:4318"`,
+		`OTEL_METRIC_EXPORT_INTERVAL`,
+		`value: "60000"`,
 		`proxyBodySize: "50m"`,
 		`nginx.ingress.kubernetes.io/rewrite-target: /subscribe`,
 		`websocket:`,
+		`host: telemetry.example.com`,
+		`service: telemetry-gateway`,
+		`repository: ghcr.io/flameinthedark/gochat-telemetry-gateway`,
+		`telemetry-gateway-config`,
 		`rootUserEmail: "ops@example.com"`,
 		`rootUserPassword: "Complexpass#123"`,
 		`host: "observe.example.com"`,
@@ -117,9 +125,12 @@ func TestRenderAuthConfigIncludesProviderSpecificSecrets(t *testing.T) {
 		t.Fatalf("prepareOptions returned error: %v", err)
 	}
 
-	config := renderAuthConfig(prepared, "keydb:6379", "host=citus-master")
+	config := renderAuthConfig(prepared, "keydb:6379", "host=citus-master", "nats://nats:4222")
 	for _, expected := range []string{
 		`email_provider: "sendpulse"`,
+		`mfa_encryption_key: "`,
+		`nats_conn_string: "nats://nats:4222"`,
+		`mfa_recovery_template: "./mfa_recovery.tmpl"`,
 		`sendpulse_user_id: "user-id"`,
 		`sendpulse_secret: "sendpulse-secret"`,
 		`resend_api_key: "resend-key"`,
@@ -204,14 +215,15 @@ func TestRenderComposeEnvIncludesObservabilityValues(t *testing.T) {
 		"OPENOBSERVE_PORT=5080",
 		"OTEL_COLLECTOR_HEALTH_PORT=13133",
 		"OTEL_COLLECTOR_FLUENTD_PORT=24224",
-		"OTEL_COLLECTOR_GRPC_PORT=4317",
-		"OTEL_COLLECTOR_HTTP_PORT=4318",
+		"TELEMETRY_HOST=telemetry.example.com",
+		"TRAEFIK_TELEMETRY_ALIAS=telemetry.example.com",
 		"OPENOBSERVE_ROOT_EMAIL=ops@example.com",
 		"OPENOBSERVE_ROOT_PASSWORD=Complexpass#123",
 		"OPENOBSERVE_ORG=default",
 		"OPENOBSERVE_LOG_STREAM=gochat_logs",
 		"OPENOBSERVE_METRIC_STREAM=gochat-metrics",
 		"OPENOBSERVE_TRACE_STREAM=gochat_traces",
+		"GOCHAT_IMAGE_TELEMETRY_GATEWAY=ghcr.io/flameinthedark/gochat-telemetry-gateway:v1.2.3",
 		"GOCHAT_IMAGE_MIGRATIONS=ghcr.io/flameinthedark/gochat-migrations:v1.2.3",
 	} {
 		if !strings.Contains(env, expected) {
@@ -242,5 +254,8 @@ func TestPrepareOptionsDefaultsMigrationsImageToBackendTag(t *testing.T) {
 	}
 	if prepared.imageMigrations != "ghcr.io/flameinthedark/gochat-migrations:v1.2.3" {
 		t.Fatalf("unexpected migrations image ref: %s", prepared.imageMigrations)
+	}
+	if prepared.imageTelemetryGateway != "ghcr.io/flameinthedark/gochat-telemetry-gateway:v1.2.3" {
+		t.Fatalf("unexpected telemetry gateway image ref: %s", prepared.imageTelemetryGateway)
 	}
 }

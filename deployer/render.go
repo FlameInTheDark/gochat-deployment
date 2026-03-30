@@ -5,26 +5,30 @@ import (
 	"strings"
 )
 
+const defaultOTELMetricExportInterval = "60000"
+
 func (e *Engine) renderOutputs(prepared *preparedOptions) (map[string]string, string) {
 	composeConfigs := map[string]string{
-		"api_config.yaml":         renderAPIConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://nats:4222", "nats://indexer-nats:4222", "http://etcd:2379"),
-		"auth_config.yaml":        renderAuthConfig(prepared, "keydb:6379", prepared.composePGDSN),
-		"attachments_config.yaml": renderAttachmentsConfig(prepared, "scylla", "nats://nats:4222", "keydb:6379", prepared.composePGDSN),
-		"ws_config.yaml":          renderWSConfig(prepared, "scylla", prepared.composePGDSN, "keydb:6379", "nats://nats:4222"),
-		"webhook_config.yaml":     renderWebhookConfig(prepared, "scylla", "keydb:6379", "nats://nats:4222", "http://etcd:2379"),
-		"indexer_config.yaml":     renderIndexerConfig(prepared, "nats://indexer-nats:4222", "http://opensearch:9200"),
-		"embedder_config.yaml":    renderEmbedderConfig("scylla", "nats://nats:4222", "keydb:6379"),
+		"api_config.yaml":               renderAPIConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://nats:4222", "nats://indexer-nats:4222", "http://etcd:2379"),
+		"auth_config.yaml":              renderAuthConfig(prepared, "keydb:6379", prepared.composePGDSN, "nats://nats:4222"),
+		"attachments_config.yaml":       renderAttachmentsConfig(prepared, "scylla", "nats://nats:4222", "keydb:6379", prepared.composePGDSN),
+		"ws_config.yaml":                renderWSConfig(prepared, "scylla", prepared.composePGDSN, "keydb:6379", "nats://nats:4222"),
+		"webhook_config.yaml":           renderWebhookConfig(prepared, "scylla", "keydb:6379", "nats://nats:4222", "http://etcd:2379"),
+		"indexer_config.yaml":           renderIndexerConfig(prepared, "nats://indexer-nats:4222", "http://opensearch:9200"),
+		"embedder_config.yaml":          renderEmbedderConfig("scylla", "nats://nats:4222", "keydb:6379"),
+		"telemetry_gateway_config.yaml": renderTelemetryGatewayConfig(prepared, "http://otel-collector:4318"),
 	}
 
 	helmPGDSN := fmt.Sprintf("host=%s-citus-master port=5432 user=postgres password=%s dbname=gochat sslmode=disable", prepared.helmFullName, prepared.PostgresPassword)
 	helmValues := renderHelmValues(prepared, map[string]string{
-		"api":         renderAPIConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", helmPGDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-nats:4222", "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
-		"auth":        renderAuthConfig(prepared, prepared.helmFullName+"-keydb:6379", helmPGDSN),
-		"attachments": renderAttachmentsConfig(prepared, prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379", helmPGDSN),
-		"ws":          renderWSConfig(prepared, prepared.helmFullName+"-scylla", helmPGDSN, prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222"),
-		"webhook":     renderWebhookConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
-		"indexer":     renderIndexerConfig(prepared, "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-opensearch:9200"),
-		"embedder":    renderEmbedderConfig(prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379"),
+		"api":              renderAPIConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", helmPGDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-nats:4222", "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
+		"auth":             renderAuthConfig(prepared, prepared.helmFullName+"-keydb:6379", helmPGDSN, "nats://"+prepared.helmFullName+"-nats:4222"),
+		"attachments":      renderAttachmentsConfig(prepared, prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379", helmPGDSN),
+		"ws":               renderWSConfig(prepared, prepared.helmFullName+"-scylla", helmPGDSN, prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222"),
+		"webhook":          renderWebhookConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
+		"indexer":          renderIndexerConfig(prepared, "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-opensearch:9200"),
+		"embedder":         renderEmbedderConfig(prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379"),
+		"telemetryGateway": renderTelemetryGatewayConfig(prepared, "http://"+prepared.helmFullName+"-otel-collector:4318"),
 	})
 
 	return composeConfigs, helmValues
@@ -35,8 +39,10 @@ func renderComposeEnv(prepared *preparedOptions) string {
 		"APP_HOST=" + prepared.AppHost,
 		"API_HOST=" + prepared.APIHost,
 		"WS_HOST=" + prepared.WSHost,
+		"TELEMETRY_HOST=" + prepared.TelemetryHost,
 		"STORAGE_HOST=" + prepared.StorageHost,
 		"MINIO_CONSOLE_HOST=" + prepared.MinIOConsoleHost,
+		"TRAEFIK_TELEMETRY_ALIAS=" + prepared.telemetryAlias,
 		"TRAEFIK_STORAGE_ALIAS=" + prepared.storageAlias,
 		"TRAEFIK_MINIO_CONSOLE_ALIAS=" + prepared.minioConsoleAlias,
 		"HTTP_PORT=80",
@@ -45,8 +51,6 @@ func renderComposeEnv(prepared *preparedOptions) string {
 		"OPENOBSERVE_PORT=5080",
 		"OTEL_COLLECTOR_HEALTH_PORT=13133",
 		"OTEL_COLLECTOR_FLUENTD_PORT=24224",
-		"OTEL_COLLECTOR_GRPC_PORT=4317",
-		"OTEL_COLLECTOR_HTTP_PORT=4318",
 		"",
 		"POSTGRES_USER=postgres",
 		"POSTGRES_PASSWORD=" + prepared.PostgresPassword,
@@ -76,6 +80,7 @@ func renderComposeEnv(prepared *preparedOptions) string {
 		"GOCHAT_IMAGE_WEBHOOK=" + prepared.imageWebhook,
 		"GOCHAT_IMAGE_INDEXER=" + prepared.imageIndexer,
 		"GOCHAT_IMAGE_EMBEDDER=" + prepared.imageEmbedder,
+		"GOCHAT_IMAGE_TELEMETRY_GATEWAY=" + prepared.imageTelemetryGateway,
 		"GOCHAT_IMAGE_UI=" + prepared.imageUI,
 		"GOCHAT_IMAGE_MIGRATIONS=" + prepared.imageMigrations,
 	}
@@ -149,7 +154,7 @@ func renderAPIConfig(prepared *preparedOptions, scyllaHost, keydbAddr, pgDSN, op
 	}, "\n")
 }
 
-func renderAuthConfig(prepared *preparedOptions, keydbAddr, pgDSN string) string {
+func renderAuthConfig(prepared *preparedOptions, keydbAddr, pgDSN, natsAddr string) string {
 	return strings.Join([]string{
 		"# App",
 		`app_name: "GoChat"`,
@@ -165,12 +170,17 @@ func renderAuthConfig(prepared *preparedOptions, keydbAddr, pgDSN string) string
 		"",
 		"# Auth",
 		fmt.Sprintf("auth_secret: %q", prepared.AuthSecret),
+		fmt.Sprintf("mfa_encryption_key: %q", prepared.MFAEncryptionKey),
+		"",
+		"# NATS",
+		fmt.Sprintf("nats_conn_string: %q", natsAddr),
 		"",
 		"# Email",
 		fmt.Sprintf("email_source: %q", prepared.EmailSource),
 		fmt.Sprintf("email_name: %q", prepared.EmailName),
 		`email_template: "./email_notify.tmpl"`,
 		`password_reset_template: "./password_reset.tmpl"`,
+		`mfa_recovery_template: "./mfa_recovery.tmpl"`,
 		fmt.Sprintf("email_provider: %q", prepared.EmailProvider),
 		fmt.Sprintf("sendpulse_user_id: %q", prepared.SendpulseUserID),
 		fmt.Sprintf("sendpulse_secret: %q", prepared.SendpulseSecret),
@@ -315,6 +325,27 @@ func renderEmbedderConfig(scyllaHost, natsAddr, keydbAddr string) string {
 	}, "\n")
 }
 
+func renderTelemetryGatewayConfig(prepared *preparedOptions, upstreamEndpoint string) string {
+	return strings.Join([]string{
+		`server_address: ":4318"`,
+		"api_log: true",
+		`log_level: "info"`,
+		"",
+		"# Shared HS256 secret used to validate SFU service JWTs (typ=sfu, id=<service_id>).",
+		fmt.Sprintf("jwt_secret: %q", prepared.WebhookJWTSecret),
+		"",
+		"# Internal collector OTLP HTTP endpoint. Keep the collector private and expose",
+		"# only this telemetry gateway publicly.",
+		fmt.Sprintf("upstream_endpoint: %q", upstreamEndpoint),
+		"",
+		"# Guardrails for external telemetry pushes.",
+		"body_limit_bytes: 10485760",
+		"request_timeout_ms: 5000",
+		"rate_limit_per_second: 20",
+		"rate_limit_burst: 40",
+	}, "\n")
+}
+
 func renderHelmValues(prepared *preparedOptions, configs map[string]string) string {
 	ingressHosts := []string{
 		fmt.Sprintf(`  - host: %s
@@ -344,6 +375,16 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
         service: ui
         port: 80`, prepared.AppHost),
 	}
+	if prepared.TelemetryHost != "" {
+		ingressHosts = append(ingressHosts,
+			fmt.Sprintf(`  - host: %s
+    paths:
+      - path: /
+        pathType: Prefix
+        service: telemetry-gateway
+        port: 4318`, prepared.TelemetryHost),
+		)
+	}
 	if prepared.StorageMode == StorageMinIO {
 		ingressHosts = append(ingressHosts,
 			fmt.Sprintf(`  - host: %s
@@ -363,7 +404,7 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 
 	tlsBlock := "  tls: []"
 	if prepared.useTLS && prepared.TLSSecretName != "" {
-		hosts := uniqueStrings([]string{prepared.AppHost, prepared.APIHost, prepared.WSHost})
+		hosts := uniqueStrings([]string{prepared.AppHost, prepared.APIHost, prepared.WSHost, prepared.TelemetryHost})
 		if prepared.StorageMode == StorageMinIO {
 			hosts = append(hosts, prepared.StorageHost, prepared.MinIOConsoleHost)
 		}
@@ -514,6 +555,17 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 		fmt.Sprintf("      openobserveLogStream: %s", prepared.openObserveLogStream),
 		fmt.Sprintf("      openobserveMetricStream: %s", prepared.openObserveMetricStream),
 		fmt.Sprintf("      openobserveTraceStream: %s", prepared.openObserveTraceStream),
+		"  telemetryGateway:",
+		"    enabled: true",
+		"    image:",
+		"      repository: "+imageRepository(prepared.imageTelemetryGateway),
+		fmt.Sprintf("      tag: %q", prepared.backendTag),
+		indent(renderHelmOtelEnvBlock(prepared), 2),
+		"    service:",
+		"      type: ClusterIP",
+		"      port: 4318",
+		"    config: |",
+		indent(configs["telemetryGateway"], 6),
 	)
 
 	return strings.Join(lines, "\n")
@@ -528,6 +580,8 @@ func renderHelmOtelEnvBlock(prepared *preparedOptions) string {
 		fmt.Sprintf("      value: %q", "http://"+prepared.helmFullName+"-otel-collector:4318"),
 		"    - name: OTEL_EXPORTER_OTLP_PROTOCOL",
 		`      value: "http/protobuf"`,
+		"    - name: OTEL_METRIC_EXPORT_INTERVAL",
+		fmt.Sprintf("      value: %q", defaultOTELMetricExportInterval),
 	}, "\n")
 }
 

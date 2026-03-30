@@ -51,6 +51,9 @@ spec:
             - name: config
               mountPath: /dist/password_reset.tmpl
               subPath: password_reset.tmpl
+            - name: config
+              mountPath: /dist/mfa_recovery.tmpl
+              subPath: mfa_recovery.tmpl
           resources:
             {{- toYaml .Values.auth.resources | nindent 12 }}
       volumes:

@@ -2,6 +2,7 @@ x-otel-app-env: &otel-app-env
   GOCHAT_DEPLOYMENT_ENV: docker-compose
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_METRIC_EXPORT_INTERVAL: "60000"
 
 x-go-service-logging: &go-service-logging
   driver: fluentd
@@ -33,6 +34,7 @@ services:
       default:
         aliases:
           - ${APP_HOST}
+          - ${TRAEFIK_TELEMETRY_ALIAS}
           - ${TRAEFIK_STORAGE_ALIAS}
           - ${TRAEFIK_MINIO_CONSOLE_ALIAS}
 
@@ -54,8 +56,11 @@ services:
       - ../.generated/compose/config/auth_config.yaml:/dist/config.yaml:ro
       - ./templates/email_notify.tmpl:/dist/email_notify.tmpl:ro
       - ./templates/password_reset.tmpl:/dist/password_reset.tmpl:ro
+      - ./templates/mfa_recovery.tmpl:/dist/mfa_recovery.tmpl:ro
     depends_on:
       keydb:
+        condition: service_started
+      nats:
         condition: service_started
       citus-master:
         condition: service_healthy
@@ -312,6 +317,23 @@ services:
     ports:
       - "${OPENOBSERVE_PORT:-5080}:5080"
 
+  telemetry-gateway:
+    image: ${GOCHAT_IMAGE_TELEMETRY_GATEWAY}
+    restart: unless-stopped
+    logging: *go-service-logging
+    environment: *otel-app-env
+    depends_on:
+      otel-collector:
+        condition: service_started
+    volumes:
+      - ../.generated/compose/config/telemetry_gateway_config.yaml:/dist/config.yaml:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.telemetry-gateway.rule=Host(`${TELEMETRY_HOST}`)
+      - traefik.http.routers.telemetry-gateway.entrypoints=web
+      - traefik.http.routers.telemetry-gateway.priority=100
+      - traefik.http.services.telemetry-gateway.loadbalancer.server.port=4318
+
   otel-collector:
     image: ${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:latest}
     restart: unless-stopped
@@ -331,8 +353,6 @@ services:
     ports:
       - "${OTEL_COLLECTOR_HEALTH_PORT:-13133}:13133"
       - "${OTEL_COLLECTOR_FLUENTD_PORT:-24224}:24224"
-      - "${OTEL_COLLECTOR_GRPC_PORT:-4317}:4317"
-      - "${OTEL_COLLECTOR_HTTP_PORT:-4318}:4318"
 
   etcd:
     image: ${ETCD_IMAGE:-quay.io/coreos/etcd:v3.5.0}

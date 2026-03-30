@@ -18,7 +18,7 @@ You do not need to prepare those repositories manually before deploying. The dep
 - Helm for Kubernetes installs
 - Automatic backend and frontend tag resolution
 - Version-matched `gochat-migrations` container for deploy and update flows
-- Built-in OpenObserve and OpenTelemetry Collector wiring
+- Built-in OpenObserve, OpenTelemetry Collector, and external SFU telemetry gateway wiring
 - Generated `.generated/deployment-guide.md` with URLs, commands, credentials, and SFU instructions
 
 ## Quick Start
@@ -177,6 +177,12 @@ The deployer follows the upstream single-domain router shape:
 | API | `https://example.com/api/v1` |
 | WebSocket | `wss://example.com/ws` |
 
+External SFU telemetry is published on its own host:
+
+| Surface | URL |
+| --- | --- |
+| Telemetry Gateway | `https://telemetry.example.com` |
+
 Bundled MinIO uses separate public hosts:
 
 | Surface | URL |
@@ -232,7 +238,7 @@ The generated guide contains:
 - If you set an ingress class and do not force bundled Traefik on, the deployer auto-disables bundled Traefik and renders ingress-nginx friendly websocket routing.
 - OpenObserve admin email and password must be supplied explicitly for `render`, `deploy`, and the wizard.
 - Compose exposes OpenSearch Dashboards on `${OPENSEARCH_DASHBOARDS_PORT:-5601}`.
-- Compose also includes the upstream local observability path: OpenObserve on `${OPENOBSERVE_PORT:-5080}` and OTEL collector ports and health endpoints.
+- Compose also includes the upstream observability path: OpenObserve on `${OPENOBSERVE_PORT:-5080}`, a public telemetry gateway on `telemetry.<base-domain>`, and OTEL collector health plus Docker log ingress endpoints.
 - Vendored OpenObserve dashboard and alert assets live under `monitoring/openobserve/`.
 - `render` and `deploy` need GitHub access only when backend or frontend tags are omitted and the deployer has to resolve the latest releases. Set `GITHUB_TOKEN` or `GH_TOKEN` if you need authenticated GitHub API access.
 - SFU is intentionally not deployed automatically. The deployer generates the credentials and instructions you need to deploy it separately.

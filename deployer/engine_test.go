@@ -2,6 +2,7 @@ package deployer
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -37,6 +38,12 @@ func TestPrepareOptionsComposeMinIOUsesRootDomainRouting(t *testing.T) {
 	}
 	if prepared.wsPublicURL != "ws://example.com/ws/subscribe" {
 		t.Fatalf("wsPublicURL = %q, want ws://example.com/ws/subscribe", prepared.wsPublicURL)
+	}
+	if prepared.TelemetryHost != "telemetry.example.com" {
+		t.Fatalf("TelemetryHost = %q, want telemetry.example.com", prepared.TelemetryHost)
+	}
+	if prepared.telemetryPublicURL != "http://telemetry.example.com" {
+		t.Fatalf("telemetryPublicURL = %q, want http://telemetry.example.com", prepared.telemetryPublicURL)
 	}
 	if prepared.StorageHost != "storage.example.com" {
 		t.Fatalf("StorageHost = %q, want storage.example.com", prepared.StorageHost)
@@ -97,6 +104,9 @@ func TestPrepareOptionsHelmExternalStorageRequiresS3Values(t *testing.T) {
 	if prepared.wsPublicURL != "wss://example.com/ws" {
 		t.Fatalf("wsPublicURL = %q, want wss://example.com/ws", prepared.wsPublicURL)
 	}
+	if prepared.telemetryPublicURL != "https://telemetry.example.com" {
+		t.Fatalf("telemetryPublicURL = %q, want https://telemetry.example.com", prepared.telemetryPublicURL)
+	}
 	if prepared.storageEndpointURL != "https://objects.example.net" {
 		t.Fatalf("storageEndpointURL = %q, want https://objects.example.net", prepared.storageEndpointURL)
 	}
@@ -136,6 +146,29 @@ func TestPrepareOptionsHelmAutoDisablesBundledTraefikWhenIngressClassIsSet(t *te
 	}
 	if prepared.openObserveRootEmail != "ops@example.com" {
 		t.Fatalf("openObserveRootEmail = %q, want ops@example.com", prepared.openObserveRootEmail)
+	}
+}
+
+func TestPrepareOptionsGeneratesValidMFAEncryptionKey(t *testing.T) {
+	engine := NewEngine(nil)
+
+	prepared, err := engine.prepareOptions(context.Background(), withTestOpenObserve(Options{
+		DeploymentType: DeploymentCompose,
+		StorageMode:    StorageMinIO,
+		BaseDomain:     "example.com",
+		BackendTag:     "v1.2.3",
+		FrontendTag:    "v2.3.4",
+	}))
+	if err != nil {
+		t.Fatalf("prepareOptions returned error: %v", err)
+	}
+
+	raw, err := base64.StdEncoding.DecodeString(prepared.MFAEncryptionKey)
+	if err != nil {
+		t.Fatalf("MFAEncryptionKey is not valid base64: %v", err)
+	}
+	if len(raw) != 32 {
+		t.Fatalf("decoded MFAEncryptionKey length = %d, want 32", len(raw))
 	}
 }
 

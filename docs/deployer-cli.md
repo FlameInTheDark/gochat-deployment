@@ -126,6 +126,7 @@ These flags are used by `check`, `render`, `deploy`, and as wizard seed values.
 - `--app-host HOST`
 - `--api-host HOST`
 - `--ws-host HOST`
+- `--telemetry-host HOST`
 - `--storage-host HOST`
 - `--minio-console-host HOST`
 - `--openobserve-host HOST`
@@ -135,6 +136,9 @@ The deployer follows the upstream single-domain router shape:
 - UI: `https://example.com`
 - API: `https://example.com/api/v1`
 - WS: `wss://example.com/ws`
+- Telemetry Gateway: `https://telemetry.example.com`
+
+If `--telemetry-host` is omitted, the deployer defaults it to `telemetry.<base-domain>`.
 
 ### Images
 
@@ -155,6 +159,7 @@ If `--migrations-image-tag` is omitted, the deployer matches the migrations imag
 ### Secrets
 
 - `--auth-secret VALUE`
+- `--mfa-encryption-key VALUE`
 - `--webhook-jwt-secret VALUE`
 - `--postgres-password VALUE`
 - `--etcd-root-password VALUE`
@@ -163,6 +168,7 @@ If `--migrations-image-tag` is omitted, the deployer matches the migrations imag
 - `--openobserve-root-password VALUE`
 
 OpenObserve admin email and password must be supplied explicitly for `render` and `deploy`.
+If `--mfa-encryption-key` is omitted, the deployer generates a base64-encoded 32-byte key and writes it into the rendered auth config plus deployment guide.
 
 ## Compose Target
 

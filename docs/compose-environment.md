@@ -18,29 +18,29 @@ The generated Compose env file includes:
 - `APP_HOST`
 - `API_HOST`
 - `WS_HOST`
+- `TELEMETRY_HOST`
 - `STORAGE_HOST`
 - `MINIO_CONSOLE_HOST`
 - `OPENSEARCH_DASHBOARDS_PORT`
 - `OPENOBSERVE_PORT`
 - `OTEL_COLLECTOR_HEALTH_PORT`
 - `OTEL_COLLECTOR_FLUENTD_PORT`
-- `OTEL_COLLECTOR_GRPC_PORT`
-- `OTEL_COLLECTOR_HTTP_PORT`
 
 `API_HOST` and `WS_HOST` are aligned to `APP_HOST` so the router matches the upstream backend compose for the automated stack:
 
 - `/api/v1/*` on `APP_HOST`
 - `/ws/*` on `APP_HOST` with `/ws` stripped
 
-`APP_HOST`, `STORAGE_HOST`, and `MINIO_CONSOLE_HOST` must resolve to the deployment machine.
+`APP_HOST`, `TELEMETRY_HOST`, `STORAGE_HOST`, and `MINIO_CONSOLE_HOST` must resolve to the deployment machine.
 
 By default, `APP_HOST` is the base domain itself. Example:
 
 - UI: `http://example.com`
 - API: `http://example.com/api/v1`
 - WS: `ws://example.com/ws/subscribe`
+- Telemetry Gateway: `http://telemetry.example.com`
 
-SFU is not deployed by Compose. If you need voice, deploy SFU separately and point it at the generated webhook and etcd settings.
+SFU is not deployed by Compose. If you need voice, deploy SFU separately and point it at the generated webhook, etcd, and telemetry gateway settings.
 
 ## Storage Variables
 
@@ -76,8 +76,12 @@ The Compose stack also publishes OpenObserve on `http://<host>:5080` by default.
 Compose mirrors the upstream backend local observability model:
 
 - app services send traces and metrics to `http://otel-collector:4318`
+- external SFU nodes send OTLP HTTP traffic to `http://<telemetry-host>`
+- generated app env pins `OTEL_METRIC_EXPORT_INTERVAL=60000` so metric export stays on the backend's current 60-second cadence
 - Docker ships container logs through the Fluentd logging driver to `localhost:24224`
 - the collector forwards logs, traces, and metrics into OpenObserve
+
+For standalone SFU nodes, use the same `OTEL_METRIC_EXPORT_INTERVAL=60000` default unless you intentionally want denser short-term debugging samples.
 
 The generated env file also includes:
 
@@ -89,11 +93,10 @@ The generated env file also includes:
 - `OPENOBSERVE_METRIC_STREAM`
 - `OPENOBSERVE_TRACE_STREAM`
 
-Collector endpoints exposed on the host:
+Collector and gateway endpoints exposed on the host:
 
 - health: `http://<host>:13133/`
-- OTLP gRPC: `<host>:4317`
-- OTLP HTTP: `http://<host>:4318`
+- telemetry gateway base URL: `http://<telemetry-host>`
 - Fluentd ingress for Docker logs: `<host>:24224`
 
 OpenObserve dashboards and alert bootstrap assets are vendored in this repo under `monitoring/openobserve/`.
@@ -112,3 +115,5 @@ The deploy wrapper renders:
 - `embedder_config.yaml`
 
 These are mounted into the matching containers from `.generated/compose/config/`.
+
+The auth service also mounts bundled email templates from [compose/templates](/H:/Projects/Deployment/gochat-deployment/compose/templates), including [mfa_recovery.tmpl](/H:/Projects/Deployment/gochat-deployment/compose/templates/mfa_recovery.tmpl).

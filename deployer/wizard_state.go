@@ -6,6 +6,7 @@ type wizardState struct {
 	StorageMode           StorageMode
 	BaseDomain            string
 	AppHost               string
+	TelemetryHost         string
 	StorageHost           string
 	MinIOConsoleHost      string
 	Namespace             string
@@ -23,6 +24,7 @@ type wizardState struct {
 	TLSSecretName         string
 	OpenObserveRootEmail  string
 	OpenObserveRootPass   string
+	MFAEncryptionKey      string
 	StorageBucket         string
 	MinIORootUser         string
 	MinIORootPassword     string
@@ -53,6 +55,7 @@ func newWizardState(seed Options) wizardState {
 		StorageMode:           seed.StorageMode,
 		BaseDomain:            seed.BaseDomain,
 		AppHost:               seed.AppHost,
+		TelemetryHost:         seed.TelemetryHost,
 		StorageHost:           seed.StorageHost,
 		MinIOConsoleHost:      seed.MinIOConsoleHost,
 		Namespace:             seed.Namespace,
@@ -70,6 +73,7 @@ func newWizardState(seed Options) wizardState {
 		TLSSecretName:         seed.TLSSecretName,
 		OpenObserveRootEmail:  seed.OpenObserveRootEmail,
 		OpenObserveRootPass:   seed.OpenObserveRootPassword,
+		MFAEncryptionKey:      seed.MFAEncryptionKey,
 		StorageBucket:         seed.StorageBucket,
 		MinIORootUser:         seed.MinIORootUser,
 		MinIORootPassword:     seed.MinIORootPassword,
@@ -146,6 +150,7 @@ func (s wizardState) options() Options {
 		StorageMode:               s.StorageMode,
 		BaseDomain:                s.BaseDomain,
 		AppHost:                   s.AppHost,
+		TelemetryHost:             s.TelemetryHost,
 		StorageHost:               s.StorageHost,
 		MinIOConsoleHost:          s.MinIOConsoleHost,
 		Namespace:                 s.Namespace,
@@ -163,6 +168,7 @@ func (s wizardState) options() Options {
 		TLSSecretName:             s.TLSSecretName,
 		OpenObserveRootEmail:      s.OpenObserveRootEmail,
 		OpenObserveRootPassword:   s.OpenObserveRootPass,
+		MFAEncryptionKey:          s.MFAEncryptionKey,
 		StorageBucket:             s.StorageBucket,
 		MinIORootUser:             s.MinIORootUser,
 		MinIORootPassword:         s.MinIORootPassword,
