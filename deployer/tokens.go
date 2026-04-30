@@ -13,7 +13,10 @@ import (
 	cli "github.com/urfave/cli/v3"
 )
 
-const sfuServiceType = "sfu"
+const (
+	sfuServiceType    = "sfu"
+	streamServiceType = "stream"
+)
 
 type jwtHeader struct {
 	Algorithm string `json:"alg"`
@@ -30,18 +33,19 @@ func tokensCommand() *cli.Command {
 		Name:  "tokens",
 		Usage: "Generate helper tokens for manually managed services",
 		Commands: []*cli.Command{
-			sfuTokenCommand(),
+			serviceTokenCommand(sfuServiceType, "sfu", "Generate the webhook token used by an external SFU node", "SFU service id. If empty, a UUIDv4 is generated."),
+			serviceTokenCommand(streamServiceType, "stream", "Generate the webhook token used by an external stream node", "Stream service id. If empty, a UUIDv4 is generated."),
 		},
 	}
 }
 
-func sfuTokenCommand() *cli.Command {
+func serviceTokenCommand(serviceType, name, usage, idUsage string) *cli.Command {
 	return &cli.Command{
-		Name:  "sfu",
-		Usage: "Generate the webhook token used by an external SFU node",
+		Name:  name,
+		Usage: usage,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "secret", Aliases: []string{"s"}, Usage: "Webhook JWT secret used by the webhook service", Required: true},
-			&cli.StringFlag{Name: "id", Aliases: []string{"i"}, Usage: "SFU service id. If empty, a UUIDv4 is generated."},
+			&cli.StringFlag{Name: "id", Aliases: []string{"i"}, Usage: idUsage},
 			&cli.StringFlag{Name: "format", Aliases: []string{"f"}, Value: "text", Usage: "Output format: text or json"},
 			&cli.BoolFlag{Name: "header", Usage: "Include the X-Webhook-Token header form in the output"},
 		},
@@ -55,12 +59,12 @@ func sfuTokenCommand() *cli.Command {
 				serviceID = generatedID
 			}
 
-			token, err := generateServiceToken(cmd.String("secret"), sfuServiceType, serviceID)
+			token, err := generateServiceToken(cmd.String("secret"), serviceType, serviceID)
 			if err != nil {
 				return err
 			}
 
-			return writeSFUTokenOutput(cmd.Writer, cmd.String("format"), serviceID, token, cmd.Bool("header"))
+			return writeServiceTokenOutput(cmd.Writer, cmd.String("format"), serviceID, token, cmd.Bool("header"))
 		},
 	}
 }
@@ -128,6 +132,10 @@ func newUUIDv4() (string, error) {
 }
 
 func writeSFUTokenOutput(output io.Writer, format, serviceID, token string, includeHeader bool) error {
+	return writeServiceTokenOutput(output, format, serviceID, token, includeHeader)
+}
+
+func writeServiceTokenOutput(output io.Writer, format, serviceID, token string, includeHeader bool) error {
 	if output == nil {
 		output = io.Discard
 	}
@@ -139,10 +147,16 @@ func writeSFUTokenOutput(output io.Writer, format, serviceID, token string, incl
 
 	switch format {
 	case "", "text":
-		fmt.Fprintf(output, "service_id=%s\n", serviceID)
-		fmt.Fprintf(output, "token=%s\n", token)
+		if _, err := fmt.Fprintf(output, "service_id=%s\n", serviceID); err != nil {
+			return fmt.Errorf("write service id: %w", err)
+		}
+		if _, err := fmt.Fprintf(output, "token=%s\n", token); err != nil {
+			return fmt.Errorf("write token: %w", err)
+		}
 		if headerValue != "" {
-			fmt.Fprintln(output, headerValue)
+			if _, err := fmt.Fprintln(output, headerValue); err != nil {
+				return fmt.Errorf("write header: %w", err)
+			}
 		}
 		return nil
 	case "json":
@@ -159,7 +173,9 @@ func writeSFUTokenOutput(output io.Writer, format, serviceID, token string, incl
 		if err != nil {
 			return fmt.Errorf("marshal output: %w", err)
 		}
-		fmt.Fprintln(output, string(encoded))
+		if _, err := fmt.Fprintln(output, string(encoded)); err != nil {
+			return fmt.Errorf("write json token output: %w", err)
+		}
 		return nil
 	default:
 		return fmt.Errorf("unsupported output format %q", format)

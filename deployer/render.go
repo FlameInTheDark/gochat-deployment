@@ -14,6 +14,7 @@ func (e *Engine) renderOutputs(prepared *preparedOptions) (map[string]string, st
 		"attachments_config.yaml":       renderAttachmentsConfig(prepared, "scylla", "nats://nats:4222", "keydb:6379", prepared.composePGDSN),
 		"ws_config.yaml":                renderWSConfig(prepared, "scylla", prepared.composePGDSN, "keydb:6379", "nats://nats:4222"),
 		"webhook_config.yaml":           renderWebhookConfig(prepared, "scylla", "keydb:6379", "nats://nats:4222", "http://etcd:2379"),
+		"stream_config.yaml":            renderStreamConfig(prepared, "global", `https://stream-global.example.com`, prepared.appPublicURL, prepared.telemetryPublicURL),
 		"indexer_config.yaml":           renderIndexerConfig(prepared, "nats://indexer-nats:4222", "http://opensearch:9200"),
 		"embedder_config.yaml":          renderEmbedderConfig("scylla", "nats://nats:4222", "keydb:6379"),
 		"telemetry_gateway_config.yaml": renderTelemetryGatewayConfig(prepared, "http://otel-collector:4318"),
@@ -149,6 +150,7 @@ func renderAPIConfig(prepared *preparedOptions, scyllaHost, keydbAddr, pgDSN, op
 		"etcd_endpoints:",
 		fmt.Sprintf("  - %q", etcdEndpoint),
 		`etcd_prefix: "/gochat/sfu"`,
+		`stream_etcd_prefix: "/gochat/stream"`,
 		`etcd_username: "root"`,
 		fmt.Sprintf("etcd_password: %q", prepared.EtcdRootPassword),
 	}, "\n")
@@ -266,10 +268,11 @@ func renderWebhookConfig(prepared *preparedOptions, scyllaHost, keydbAddr, natsA
 		"api_log: true",
 		"swagger: false",
 		"",
-		"# Discovery for manually managed SFU heartbeats",
+		"# Discovery for manually managed SFU and stream heartbeats",
 		"etcd_endpoints:",
 		fmt.Sprintf("  - %q", etcdEndpoint),
 		`etcd_prefix: "/gochat/sfu"`,
+		`stream_etcd_prefix: "/gochat/stream"`,
 		`etcd_username: "root"`,
 		fmt.Sprintf("etcd_password: %q", prepared.EtcdRootPassword),
 		"",
@@ -285,6 +288,58 @@ func renderWebhookConfig(prepared *preparedOptions, scyllaHost, keydbAddr, natsA
 		"",
 		"# NATS",
 		fmt.Sprintf("nats_conn_string: %q", natsAddr),
+	}, "\n")
+}
+
+func renderStreamConfig(prepared *preparedOptions, region, publicBaseURL, webhookBaseURL, telemetryBaseURL string) string {
+	telemetryHeaders := ""
+	if telemetryBaseURL != "" {
+		telemetryHeaders = "Authorization=Bearer " + prepared.streamWebhookToken
+	}
+
+	return strings.Join([]string{
+		`server_address: ":3310"`,
+		fmt.Sprintf("auth_secret: %q", prepared.AuthSecret),
+		"stun_servers:",
+		`  - "stun:stun.l.google.com:19302"`,
+		fmt.Sprintf("region: %q", region),
+		fmt.Sprintf("public_base_url: %q", publicBaseURL),
+		`ice_public_ip: ""`,
+		"",
+		"# Optional DTLS certificate/key pair for WebRTC peer connections.",
+		"# If left empty, the stream service generates a self-signed certificate at startup.",
+		`dtls_certificate_file: ""`,
+		`dtls_private_key_file: ""`,
+		"",
+		"# Optional: restrict WebRTC UDP sockets to a fixed port range.",
+		"udp_port_range_start: 0",
+		"udp_port_range_end: 0",
+		"",
+		"# Webhook callbacks. The stream service appends /api/v1/webhook/stream/* itself.",
+		fmt.Sprintf("webhook_url: %q", webhookBaseURL),
+		fmt.Sprintf("webhook_token: %q", prepared.streamWebhookToken),
+		fmt.Sprintf("service_id: %q", prepared.streamServiceID),
+		"",
+		"# External telemetry gateway.",
+		fmt.Sprintf("telemetry_otlp_endpoint: %q", telemetryBaseURL),
+		fmt.Sprintf("telemetry_otlp_headers: %q", telemetryHeaders),
+		`telemetry_otlp_protocol: "http/protobuf"`,
+		fmt.Sprintf("telemetry_metric_export_interval: %q", defaultOTELMetricExportInterval),
+		"",
+		"signal_heartbeat_interval_ms: 15000",
+		"",
+		"dave_enabled: true",
+		"dave_required_default: true",
+		"dave_transition_timeout_ms: 2000",
+		"dave_old_ratchet_window_ms: 10000",
+		"# Keep AV1 disabled for DAVE-encrypted streams until browser encoded transforms",
+		"# interoperate reliably with AV1 frames.",
+		"dave_allow_av1: false",
+		"",
+		"max_audio_bitrate_kbps: 256",
+		"enforce_audio_bitrate: false",
+		"audio_bitrate_margin_percent: 15",
+		"max_video_bitrate_kbps: 100000",
 	}, "\n")
 }
 

@@ -302,7 +302,9 @@ func runWizard(ctx context.Context, engine *Engine, seed Options) error {
 		return fmt.Errorf("wizard cancelled")
 	}
 
-	fmt.Fprintln(os.Stdout)
+	if _, err := fmt.Fprintln(os.Stdout); err != nil {
+		return fmt.Errorf("write wizard spacer: %w", err)
+	}
 	var result RenderResult
 	if state.Action == ActionRender {
 		result, err = engine.Render(ctx, opts, os.Stdout)
@@ -313,8 +315,7 @@ func runWizard(ctx context.Context, engine *Engine, seed Options) error {
 		return err
 	}
 
-	printSummaryTo(os.Stdout, result, state.Action == ActionRender)
-	return nil
+	return printSummaryTo(os.Stdout, result, state.Action == ActionRender)
 }
 
 func reviewText(prepared *preparedOptions, report CheckReport) string {

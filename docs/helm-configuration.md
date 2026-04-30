@@ -41,7 +41,7 @@ The Helm deployment is configured to match the upstream backend compose router:
 
 When bundled Traefik is enabled, the chart creates the strip-prefix resources needed for `/ws`. If you use another ingress controller, you need to reproduce that rewrite behavior yourself.
 
-SFU is intentionally excluded from the Helm chart. If you need voice, deploy SFU separately with the required direct networking and reuse the automated `webhook`, `etcd`, and telemetry gateway components for registration plus observability.
+SFU and stream services are intentionally excluded from the Helm chart. If you need voice or screen sharing, deploy them separately with the required direct networking and reuse the automated `webhook`, `etcd`, and telemetry gateway components for registration plus observability. Stream nodes must use the same region ids as voice nodes (`global`, `eu`, `us-east`) because the API selects stream discovery entries only from the effective voice region.
 
 Example app endpoints for `example.com`:
 
@@ -59,6 +59,7 @@ The generated override file pins:
 - `routing.appHost`
 - shared OTEL app env, including `OTEL_METRIC_EXPORT_INTERVAL=60000`
 - rendered config blocks for API/auth/attachments/ws/webhook/indexer/embedder
+- a generated `.generated/compose/config/stream_config.yaml` starter file for the first external stream node, with `dave_allow_av1: false` by default for DAVE-encrypted stream compatibility
 - rendered telemetry gateway image, config, and ingress host
 - PostgreSQL, etcd, and OpenSearch secrets
 - ingress host rules for app, storage, and MinIO console

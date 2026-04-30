@@ -177,7 +177,7 @@ The deployer follows the upstream single-domain router shape:
 | API | `https://example.com/api/v1` |
 | WebSocket | `wss://example.com/ws` |
 
-External SFU telemetry is published on its own host:
+External SFU and stream telemetry is published on its own host:
 
 | Surface | URL |
 | --- | --- |
@@ -228,7 +228,7 @@ The generated guide contains:
 - rendered credentials
 - post-deploy commands
 - OpenObserve access details
-- external SFU deployment and token-generation instructions
+- external SFU and stream deployment and token-generation instructions
 
 ## Notes
 
@@ -241,7 +241,7 @@ The generated guide contains:
 - Compose also includes the upstream observability path: OpenObserve on `${OPENOBSERVE_PORT:-5080}`, a public telemetry gateway on `telemetry.<base-domain>`, and OTEL collector health plus Docker log ingress endpoints.
 - Vendored OpenObserve dashboard and alert assets live under `monitoring/openobserve/`.
 - `render` and `deploy` need GitHub access only when backend or frontend tags are omitted and the deployer has to resolve the latest releases. Set `GITHUB_TOKEN` or `GH_TOKEN` if you need authenticated GitHub API access.
-- SFU is intentionally not deployed automatically. The deployer generates the credentials and instructions you need to deploy it separately.
+- SFU and stream services are intentionally not deployed automatically. The deployer generates the credentials, stream starter config, and instructions you need to deploy them separately.
 
 ## Documentation
 

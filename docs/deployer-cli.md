@@ -38,6 +38,19 @@ gochat-deployer tokens sfu --secret WEBHOOK_SECRET --id sfu-eu-1 --format json -
 
 If `--id` is omitted, the deployer generates a UUIDv4 service id automatically.
 
+### `gochat-deployer tokens stream`
+
+Generates the webhook JWT used by an external stream node.
+
+Examples:
+
+```bash
+gochat-deployer tokens stream --secret WEBHOOK_SECRET
+gochat-deployer tokens stream --secret WEBHOOK_SECRET --id stream-eu-1 --format json --header
+```
+
+If `--id` is omitted, the deployer generates a UUIDv4 service id automatically.
+
 ### `gochat-deployer render`
 
 Renders generated config into the workspace without running Docker Compose or Helm.
@@ -66,7 +79,7 @@ gochat-deployer render \
 ```
 
 `render` prints the exact `docker compose` and `helm upgrade --install` commands that can be run against the generated workspace.
-It also writes `.generated/deployment-guide.md`, a Markdown handoff file with URLs, commands, credentials, and a standalone SFU deployment section for the rendered deployment.
+It also writes `.generated/deployment-guide.md`, a Markdown handoff file with URLs, commands, credentials, and standalone SFU/stream deployment sections for the rendered deployment.
 
 ### `gochat-deployer deploy`
 
@@ -169,6 +182,7 @@ If `--migrations-image-tag` is omitted, the deployer matches the migrations imag
 
 OpenObserve admin email and password must be supplied explicitly for `render` and `deploy`.
 If `--mfa-encryption-key` is omitted, the deployer generates a base64-encoded 32-byte key and writes it into the rendered auth config plus deployment guide.
+The shared `--auth-secret` signs and validates both voice and stream media JWTs. External stream starter configs render this same value as `auth_secret`; webhook service tokens are still generated separately from `--webhook-jwt-secret`.
 
 ## Compose Target
 

@@ -61,6 +61,8 @@ type preparedOptions struct {
 	openObserveTraceStream  string
 	sfuServiceID            string
 	sfuWebhookToken         string
+	streamServiceID         string
+	streamWebhookToken      string
 	backendTag              string
 	frontendTag             string
 	imageAPI                string
@@ -218,7 +220,9 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 		return RenderResult{}, fmt.Errorf("write %s: %w", helmValuesPath, err)
 	}
 
-	fmt.Fprintf(output, "[gochat] Rendered bundle into %s\n", prepared.WorkspaceRoot)
+	if _, err := fmt.Fprintf(output, "[gochat] Rendered bundle into %s\n", prepared.WorkspaceRoot); err != nil {
+		return RenderResult{}, fmt.Errorf("write render result: %w", err)
+	}
 
 	result := RenderResult{
 		WorkspaceRoot:       prepared.WorkspaceRoot,
@@ -602,6 +606,16 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 		return nil, err
 	}
 	prepared.sfuWebhookToken = sfuWebhookToken
+	streamServiceID, err := newUUIDv4()
+	if err != nil {
+		return nil, err
+	}
+	prepared.streamServiceID = streamServiceID
+	streamWebhookToken, err := generateServiceToken(prepared.WebhookJWTSecret, streamServiceType, prepared.streamServiceID)
+	if err != nil {
+		return nil, err
+	}
+	prepared.streamWebhookToken = streamWebhookToken
 
 	return prepared, nil
 }
@@ -611,7 +625,9 @@ func runCommand(ctx context.Context, dir string, extraEnv []string, output io.Wr
 		output = io.Discard
 	}
 
-	fmt.Fprintf(output, "[gochat] Running: %s %s\n", name, strings.Join(args, " "))
+	if _, err := fmt.Fprintf(output, "[gochat] Running: %s %s\n", name, strings.Join(args, " ")); err != nil {
+		return fmt.Errorf("write command banner: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), extraEnv...)

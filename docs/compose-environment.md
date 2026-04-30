@@ -40,7 +40,7 @@ By default, `APP_HOST` is the base domain itself. Example:
 - WS: `ws://example.com/ws/subscribe`
 - Telemetry Gateway: `http://telemetry.example.com`
 
-SFU is not deployed by Compose. If you need voice, deploy SFU separately and point it at the generated webhook, etcd, and telemetry gateway settings.
+SFU and stream services are not deployed by Compose. If you need voice or screen sharing, deploy them separately and point them at the generated webhook, etcd, and telemetry gateway settings. Stream nodes must use the same region ids as voice nodes so screen sharing stays region-locked to the active voice route.
 
 ## Storage Variables
 
@@ -76,12 +76,12 @@ The Compose stack also publishes OpenObserve on `http://<host>:5080` by default.
 Compose mirrors the upstream backend local observability model:
 
 - app services send traces and metrics to `http://otel-collector:4318`
-- external SFU nodes send OTLP HTTP traffic to `http://<telemetry-host>`
+- external SFU and stream nodes send OTLP HTTP traffic to `http://<telemetry-host>`
 - generated app env pins `OTEL_METRIC_EXPORT_INTERVAL=60000` so metric export stays on the backend's current 60-second cadence
 - Docker ships container logs through the Fluentd logging driver to `localhost:24224`
 - the collector forwards logs, traces, and metrics into OpenObserve
 
-For standalone SFU nodes, use the same `OTEL_METRIC_EXPORT_INTERVAL=60000` default unless you intentionally want denser short-term debugging samples.
+For standalone SFU and stream nodes, use the same `OTEL_METRIC_EXPORT_INTERVAL=60000` default unless you intentionally want denser short-term debugging samples.
 
 The generated env file also includes:
 
@@ -111,9 +111,10 @@ The deploy wrapper renders:
 - `attachments_config.yaml`
 - `ws_config.yaml`
 - `webhook_config.yaml`
+- `stream_config.yaml` for the first external stream node
 - `indexer_config.yaml`
 - `embedder_config.yaml`
 
-These are mounted into the matching containers from `.generated/compose/config/`.
+The application configs are mounted into the matching containers from `.generated/compose/config/`. `stream_config.yaml` is a starter config for a separately deployed stream node and is not mounted by Compose. The generated stream starter keeps `dave_allow_av1: false` so encrypted screen sharing uses codecs with verified browser encoded-frame behavior.
 
 The auth service also mounts bundled email templates from [compose/templates](/H:/Projects/Deployment/gochat-deployment/compose/templates), including [mfa_recovery.tmpl](/H:/Projects/Deployment/gochat-deployment/compose/templates/mfa_recovery.tmpl).

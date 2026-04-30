@@ -9,3 +9,4 @@ gochat-deployer
 .idea/
 *.exe
 node_modules/
+/.claude/settings.local.json

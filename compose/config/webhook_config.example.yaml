@@ -2,10 +2,11 @@ server_address: ":3200"
 api_log: true
 swagger: false
 
-# Discovery (for SFU heartbeats)
+# Discovery (for SFU and stream heartbeats)
 etcd_endpoints:
   - "http://etcd:2379"
 etcd_prefix: "/gochat/sfu"
+stream_etcd_prefix: "/gochat/stream"
 etcd_username: "root"
 etcd_password: "changeme"
 

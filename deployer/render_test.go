@@ -164,10 +164,55 @@ func TestRenderAPIConfigIncludesAttachmentDefaults(t *testing.T) {
 		`name: "Europe (Frankfurt)"`,
 		`- id: us-east`,
 		`name: "US East (Ashburn)"`,
+		`stream_etcd_prefix: "/gochat/stream"`,
 	} {
 		if !strings.Contains(config, expected) {
 			t.Fatalf("rendered api config missing %q", expected)
 		}
+	}
+	if strings.Contains(config, `stream_auth_secret`) {
+		t.Fatal("rendered api config must not include stream_auth_secret")
+	}
+}
+
+func TestRenderStreamConfigUsesSharedAuthAndStreamToken(t *testing.T) {
+	engine := NewEngine(nil)
+
+	prepared, err := engine.prepareOptions(context.Background(), withTestOpenObserve(Options{
+		DeploymentType:       DeploymentCompose,
+		StorageMode:          StorageMinIO,
+		BaseDomain:           "example.com",
+		BackendTag:           "v1.2.3",
+		FrontendTag:          "v2.3.4",
+		AuthSecret:           "app-secret",
+		WebhookJWTSecret:     "webhook-secret",
+		OpenObserveRootEmail: "ops@example.com",
+	}))
+	if err != nil {
+		t.Fatalf("prepareOptions returned error: %v", err)
+	}
+
+	config := renderStreamConfig(prepared, "eu", "https://stream-eu.example.com", "https://example.com", "https://telemetry.example.com")
+	for _, expected := range []string{
+		`server_address: ":3310"`,
+		`auth_secret: "app-secret"`,
+		`region: "eu"`,
+		`public_base_url: "https://stream-eu.example.com"`,
+		`webhook_url: "https://example.com"`,
+		`dave_required_default: true`,
+		`dave_allow_av1: false`,
+		`max_audio_bitrate_kbps: 256`,
+		`max_video_bitrate_kbps: 100000`,
+	} {
+		if !strings.Contains(config, expected) {
+			t.Fatalf("rendered stream config missing %q", expected)
+		}
+	}
+	if strings.Contains(config, "stream-secret") || strings.Contains(config, "stream_auth_secret") {
+		t.Fatal("stream config must not render a separate stream auth secret")
+	}
+	if !strings.Contains(config, prepared.streamWebhookToken) {
+		t.Fatalf("stream config missing generated stream webhook token")
 	}
 }
 

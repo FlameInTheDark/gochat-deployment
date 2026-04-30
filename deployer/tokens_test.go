@@ -8,36 +8,46 @@ import (
 )
 
 func TestGenerateServiceTokenUsesExpectedClaims(t *testing.T) {
-	token, err := generateServiceToken("supersecret", sfuServiceType, "service-123")
-	if err != nil {
-		t.Fatalf("generateServiceToken returned error: %v", err)
-	}
+	for _, tc := range []struct {
+		name        string
+		serviceType string
+	}{
+		{name: "sfu", serviceType: sfuServiceType},
+		{name: "stream", serviceType: streamServiceType},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token, err := generateServiceToken("supersecret", tc.serviceType, "service-123")
+			if err != nil {
+				t.Fatalf("generateServiceToken returned error: %v", err)
+			}
 
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		t.Fatalf("token parts = %d, want 3", len(parts))
-	}
+			parts := strings.Split(token, ".")
+			if len(parts) != 3 {
+				t.Fatalf("token parts = %d, want 3", len(parts))
+			}
 
-	var header jwtHeader
-	if err := decodeJWTPart(parts[0], &header); err != nil {
-		t.Fatalf("decode header: %v", err)
-	}
-	if header.Algorithm != "HS256" {
-		t.Fatalf("header.Algorithm = %q, want HS256", header.Algorithm)
-	}
-	if header.Type != "JWT" {
-		t.Fatalf("header.Type = %q, want JWT", header.Type)
-	}
+			var header jwtHeader
+			if err := decodeJWTPart(parts[0], &header); err != nil {
+				t.Fatalf("decode header: %v", err)
+			}
+			if header.Algorithm != "HS256" {
+				t.Fatalf("header.Algorithm = %q, want HS256", header.Algorithm)
+			}
+			if header.Type != "JWT" {
+				t.Fatalf("header.Type = %q, want JWT", header.Type)
+			}
 
-	var claims serviceTokenClaims
-	if err := decodeJWTPart(parts[1], &claims); err != nil {
-		t.Fatalf("decode claims: %v", err)
-	}
-	if claims.Type != sfuServiceType {
-		t.Fatalf("claims.Type = %q, want %q", claims.Type, sfuServiceType)
-	}
-	if claims.ID != "service-123" {
-		t.Fatalf("claims.ID = %q, want service-123", claims.ID)
+			var claims serviceTokenClaims
+			if err := decodeJWTPart(parts[1], &claims); err != nil {
+				t.Fatalf("decode claims: %v", err)
+			}
+			if claims.Type != tc.serviceType {
+				t.Fatalf("claims.Type = %q, want %q", claims.Type, tc.serviceType)
+			}
+			if claims.ID != "service-123" {
+				t.Fatalf("claims.ID = %q, want service-123", claims.ID)
+			}
+		})
 	}
 }
 

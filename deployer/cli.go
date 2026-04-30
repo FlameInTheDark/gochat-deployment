@@ -25,7 +25,9 @@ func newCLI(engine *Engine) *cli.Command {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					opts := commandOptions(cmd)
 					report := engine.Check(ctx, opts)
-					printCheckReportTo(os.Stdout, report)
+					if err := printCheckReportTo(os.Stdout, report); err != nil {
+						return err
+					}
 					if missing := report.MissingRequired(); len(missing) > 0 {
 						names := make([]string, 0, len(missing))
 						for _, item := range missing {
@@ -47,7 +49,9 @@ func newCLI(engine *Engine) *cli.Command {
 					if err := engine.ExportBundle(ctx, workspaceRoot); err != nil {
 						return err
 					}
-					fmt.Fprintf(cmd.Writer, "Exported embedded assets to %s\n", workspaceRoot)
+					if _, err := fmt.Fprintf(cmd.Writer, "Exported embedded assets to %s\n", workspaceRoot); err != nil {
+						return fmt.Errorf("write export result: %w", err)
+					}
 					return nil
 				},
 			},
@@ -63,8 +67,7 @@ func newCLI(engine *Engine) *cli.Command {
 					if err != nil {
 						return err
 					}
-					printSummaryTo(os.Stdout, result, true)
-					return nil
+					return printSummaryTo(os.Stdout, result, true)
 				},
 			},
 			{
@@ -78,8 +81,7 @@ func newCLI(engine *Engine) *cli.Command {
 					if err != nil {
 						return err
 					}
-					printSummaryTo(os.Stdout, result, false)
-					return nil
+					return printSummaryTo(os.Stdout, result, false)
 				},
 			},
 			{
@@ -223,12 +225,16 @@ func boolToToggle(on, off bool) ToggleMode {
 	return ToggleAuto
 }
 
-func printCheckReportTo(output io.Writer, report CheckReport) {
+func printCheckReportTo(output io.Writer, report CheckReport) error {
 	if output == nil {
 		output = io.Discard
 	}
-	fmt.Fprintln(output, "Tool                  Required  Status  Detail")
-	fmt.Fprintln(output, "----                  --------  ------  ------")
+	if _, err := fmt.Fprintln(output, "Tool                  Required  Status  Detail"); err != nil {
+		return fmt.Errorf("write check report header: %w", err)
+	}
+	if _, err := fmt.Fprintln(output, "----                  --------  ------  ------"); err != nil {
+		return fmt.Errorf("write check report separator: %w", err)
+	}
 	for _, item := range report.Items {
 		required := "no"
 		if item.Required {
@@ -238,33 +244,45 @@ func printCheckReportTo(output io.Writer, report CheckReport) {
 		if item.Present {
 			status = "ok"
 		}
-		fmt.Fprintf(output, "%-20s  %-8s  %-6s  %s\n", item.Name, required, status, item.Detail)
+		if _, err := fmt.Fprintf(output, "%-20s  %-8s  %-6s  %s\n", item.Name, required, status, item.Detail); err != nil {
+			return fmt.Errorf("write check report item: %w", err)
+		}
 	}
+	return nil
 }
 
-func printCheckReport(report CheckReport) {
-	printCheckReportTo(os.Stdout, report)
-}
-
-func printSummaryTo(output io.Writer, result RenderResult, includeDeployHints bool) {
+func printSummaryTo(output io.Writer, result RenderResult, includeDeployHints bool) error {
 	if output == nil {
 		output = io.Discard
 	}
-	fmt.Fprintln(output)
+	if _, err := fmt.Fprintln(output); err != nil {
+		return fmt.Errorf("write summary spacer: %w", err)
+	}
 	for _, line := range result.SummaryLines() {
-		fmt.Fprintln(output, line)
+		if _, err := fmt.Fprintln(output, line); err != nil {
+			return fmt.Errorf("write summary line: %w", err)
+		}
 	}
-	fmt.Fprintln(output, "Compose env:", result.ComposeEnvPath)
-	fmt.Fprintln(output, "Compose config:", result.ComposeConfigRoot)
-	fmt.Fprintln(output, "Helm values:", result.HelmValuesPath)
+	for _, line := range []string{
+		"Compose env: " + result.ComposeEnvPath,
+		"Compose config: " + result.ComposeConfigRoot,
+		"Helm values: " + result.HelmValuesPath,
+	} {
+		if _, err := fmt.Fprintln(output, line); err != nil {
+			return fmt.Errorf("write summary path: %w", err)
+		}
+	}
 	if includeDeployHints {
-		fmt.Fprintln(output)
-		fmt.Fprintln(output, "Deploy from rendered data:")
-		fmt.Fprintln(output, "Docker Compose:", result.ComposeDeployCommand)
-		fmt.Fprintln(output, "Helm:", result.HelmDeployCommand)
+		for _, line := range []string{
+			"",
+			"Deploy from rendered data:",
+			"Docker Compose: " + result.ComposeDeployCommand,
+			"Helm: " + result.HelmDeployCommand,
+		} {
+			if _, err := fmt.Fprintln(output, line); err != nil {
+				return fmt.Errorf("write deployment hint: %w", err)
+			}
+		}
 	}
-}
-
-func printSummary(result RenderResult) {
-	printSummaryTo(os.Stdout, result, false)
+	return nil
 }

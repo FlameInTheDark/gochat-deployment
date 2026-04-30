@@ -99,6 +99,7 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		fmt.Sprintf("- Attachments config: `%s`", filepath.Join(result.ComposeConfigRoot, "attachments_config.yaml")),
 		fmt.Sprintf("- WS config: `%s`", filepath.Join(result.ComposeConfigRoot, "ws_config.yaml")),
 		fmt.Sprintf("- Webhook config: `%s`", filepath.Join(result.ComposeConfigRoot, "webhook_config.yaml")),
+		fmt.Sprintf("- External stream config: `%s`", filepath.Join(result.ComposeConfigRoot, "stream_config.yaml")),
 		fmt.Sprintf("- Indexer config: `%s`", filepath.Join(result.ComposeConfigRoot, "indexer_config.yaml")),
 		fmt.Sprintf("- Embedder config: `%s`", filepath.Join(result.ComposeConfigRoot, "embedder_config.yaml")),
 		fmt.Sprintf("- Telemetry gateway config: `%s`", filepath.Join(result.ComposeConfigRoot, "telemetry_gateway_config.yaml")),
@@ -125,6 +126,8 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		fmt.Sprintf("- OpenObserve password: `%s`", prepared.openObserveRootPassword),
 		fmt.Sprintf("- Pre-generated SFU service ID: `%s`", prepared.sfuServiceID),
 		fmt.Sprintf("- Pre-generated SFU webhook token: `%s`", prepared.sfuWebhookToken),
+		fmt.Sprintf("- Pre-generated stream service ID: `%s`", prepared.streamServiceID),
+		fmt.Sprintf("- Pre-generated stream webhook token: `%s`", prepared.streamWebhookToken),
 	)
 
 	lines = append(lines,
@@ -200,6 +203,7 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 	}
 
 	lines = append(lines, renderSFUDeploymentSection(prepared, result)...)
+	lines = append(lines, renderStreamDeploymentSection(prepared, result)...)
 
 	lines = append(lines,
 		"",
@@ -309,6 +313,85 @@ func renderSFUDeploymentSection(prepared *preparedOptions, result RenderResult) 
 	if telemetryBaseURL == "" {
 		lines = append(lines,
 			"- The telemetry gateway is not published as a direct public URL in this render. Replace `<set-a-reachable-telemetry-url>` with a URL the external SFU host can actually reach.",
+		)
+	}
+	return lines
+}
+
+func renderStreamDeploymentSection(prepared *preparedOptions, result RenderResult) []string {
+	telemetryBaseURL := sfuTelemetryBaseURL(prepared, result)
+	telemetryBaseValue := "<set-a-reachable-telemetry-url>"
+	if telemetryBaseURL != "" {
+		telemetryBaseValue = telemetryBaseURL
+	}
+
+	lines := []string{
+		"",
+		"## External Stream Deployment",
+		"",
+		"- The deployer does not ship the stream service itself. Deploy the backend tag above as a standalone `cmd/stream` binary or container on separate infrastructure, the same way you deploy SFU nodes.",
+		"- Deploy stream nodes in the same region ids as voice (`global`, `eu`, `us-east`). The API resolves stream nodes strictly from `/gochat/stream` for the effective voice region and does not fall back across regions.",
+		"- Expose the stream service over WSS at `/signal` for clients. The API returns this service's `public_base_url` to publishers and viewers.",
+		"- `webhook_url` should be the GoChat base origin. The current stream code appends `/api/v1/webhook/stream/heartbeat`, `/api/v1/webhook/stream/start`, `/api/v1/webhook/stream/stop`, and `/api/v1/webhook/stream/alive` itself.",
+		"- Use the shared application `auth_secret` below for publisher/viewer JWT validation. This must match the API `auth_secret`.",
+		"- Reuse the same stream webhook JWT for heartbeat auth and OTLP auth: `Authorization=Bearer <same-jwt>`.",
+		"- Keep `dave_allow_av1: false` unless AV1 encrypted-frame compatibility has been verified for the target browsers.",
+		fmt.Sprintf("- GoChat base origin for stream callbacks: `%s`", result.AppPublicURL),
+		fmt.Sprintf("- Expected heartbeat endpoint once configured: `%s/webhook/stream/heartbeat`", result.APIPublicBaseURL),
+		fmt.Sprintf("- Telemetry gateway base URL for stream OTLP HTTP: `%s`", telemetryBaseValue),
+		"- Discovery prefix already configured on the GoChat side: `/gochat/stream`.",
+		fmt.Sprintf("- Rendered starter config: `%s`", filepath.Join(result.ComposeConfigRoot, "stream_config.yaml")),
+		"",
+		"### Build",
+		"",
+		"```bash",
+		"git clone https://github.com/FlameInTheDark/gochat.git",
+		"cd gochat",
+		fmt.Sprintf("git checkout %s", result.BackendTag),
+		"go build -o ./bin/gochat-stream ./cmd/stream",
+		"```",
+		"",
+		"### Minimal Config",
+		"",
+		"```yaml",
+		renderStreamConfig(prepared, "global", "https://stream-global.example.com", result.AppPublicURL, telemetryBaseValue),
+		"```",
+		"",
+		"### Observability Environment",
+		"",
+		"```powershell",
+		fmt.Sprintf("$env:GOCHAT_DEPLOYMENT_ENV = %q", sfuDeploymentEnv(prepared)),
+		`$env:STREAM_REGION = "global"`,
+		fmt.Sprintf("$env:STREAM_SERVICE_ID = %q", prepared.streamServiceID),
+		`$env:STREAM_PUBLIC_BASE_URL = "https://stream-global.example.com"`,
+		fmt.Sprintf("$env:WEBHOOK_URL = %q", result.AppPublicURL),
+		fmt.Sprintf("$env:WEBHOOK_TOKEN = %q", prepared.streamWebhookToken),
+		fmt.Sprintf("$env:AUTH_SECRET = %q", prepared.AuthSecret),
+		fmt.Sprintf("$env:OTEL_EXPORTER_OTLP_ENDPOINT = %q", telemetryBaseValue),
+		`$env:OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"`,
+		`$env:OTEL_EXPORTER_OTLP_HEADERS = "Authorization=Bearer $($env:WEBHOOK_TOKEN)"`,
+		fmt.Sprintf("$env:OTEL_METRIC_EXPORT_INTERVAL = %q", defaultOTELMetricExportInterval),
+		"```",
+		"",
+		"### Token Generation",
+		"",
+		"- The pre-generated stream credentials above can be used for the first node immediately.",
+		"- Generate additional stream credentials with the deployer when you add more nodes or want a different `service_id`.",
+		"",
+		"```bash",
+		fmt.Sprintf("gochat-deployer tokens stream --secret %s --id %s --format json", quoteCommandArg(prepared.WebhookJWTSecret), quoteCommandArg(prepared.streamServiceID)),
+		"```",
+		"",
+		"### Network Notes",
+		"",
+		"- Upstream docs require outbound access from the stream host to the GoChat webhook origin and the public telemetry gateway endpoint.",
+		"- STUN is configured by default. If your users are behind restrictive NAT, add TURN servers in `stun_servers` or your surrounding WebRTC config.",
+		"- For predictable firewalling, set `udp_port_range_start` and `udp_port_range_end` on the stream node and open that UDP range plus the HTTPS/WSS signal port.",
+		"- Keep `max_video_bitrate_kbps` high enough for 4K60-class streams. Browser/WebRTC congestion control still adapts down when bitrate drops.",
+	}
+	if telemetryBaseURL == "" {
+		lines = append(lines,
+			"- The telemetry gateway is not published as a direct public URL in this render. Replace `<set-a-reachable-telemetry-url>` with a URL the external stream host can actually reach.",
 		)
 	}
 	return lines
