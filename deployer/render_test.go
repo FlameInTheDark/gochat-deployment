@@ -25,6 +25,7 @@ func TestRenderHelmValuesIncludesFrontendURLs(t *testing.T) {
 		"api":              "api-config",
 		"auth":             "auth-config",
 		"attachments":      "attachments-config",
+		"search":           "search-config",
 		"ws":               "ws-config",
 		"webhook":          "webhook-config",
 		"indexer":          "indexer-config",
@@ -75,6 +76,7 @@ func TestRenderHelmValuesIncludesObservabilityAndWebsocketIngress(t *testing.T) 
 		"api":              "api-config",
 		"auth":             "auth-config",
 		"attachments":      "attachments-config",
+		"search":           "search-config",
 		"ws":               "ws-config",
 		"webhook":          "webhook-config",
 		"indexer":          "indexer-config",
@@ -269,6 +271,7 @@ func TestRenderComposeEnvIncludesObservabilityValues(t *testing.T) {
 		"OPENOBSERVE_METRIC_STREAM=gochat-metrics",
 		"OPENOBSERVE_TRACE_STREAM=gochat_traces",
 		"GOCHAT_IMAGE_TELEMETRY_GATEWAY=ghcr.io/flameinthedark/gochat-telemetry-gateway:v1.2.3",
+		"GOCHAT_IMAGE_SEARCH=ghcr.io/flameinthedark/gochat-search:v1.2.3",
 		"GOCHAT_IMAGE_MIGRATIONS=ghcr.io/flameinthedark/gochat-migrations:v1.2.3",
 	} {
 		if !strings.Contains(env, expected) {
@@ -302,5 +305,39 @@ func TestPrepareOptionsDefaultsMigrationsImageToBackendTag(t *testing.T) {
 	}
 	if prepared.imageTelemetryGateway != "ghcr.io/flameinthedark/gochat-telemetry-gateway:v1.2.3" {
 		t.Fatalf("unexpected telemetry gateway image ref: %s", prepared.imageTelemetryGateway)
+	}
+	if prepared.imageSearch != "ghcr.io/flameinthedark/gochat-search:v1.2.3" {
+		t.Fatalf("unexpected search image ref: %s", prepared.imageSearch)
+	}
+}
+
+func TestRenderSearchConfigUsesIndexerNATSAndStores(t *testing.T) {
+	engine := NewEngine(nil)
+
+	prepared, err := engine.prepareOptions(context.Background(), withTestOpenObserve(Options{
+		DeploymentType: DeploymentCompose,
+		StorageMode:    StorageMinIO,
+		BaseDomain:     "example.com",
+		BackendTag:     "v1.2.3",
+		FrontendTag:    "v2.3.4",
+		AuthSecret:     "app-secret",
+	}))
+	if err != nil {
+		t.Fatalf("prepareOptions returned error: %v", err)
+	}
+
+	config := renderSearchConfig(prepared, "scylla", "keydb:6379", "host=citus-master", "http://opensearch:9200", "nats://indexer-nats:4222")
+	for _, expected := range []string{
+		`server_address: ":3100"`,
+		`auth_secret: "app-secret"`,
+		`cluster: ["scylla"]`,
+		`keydb: "keydb:6379"`,
+		`pg_dsn: "host=citus-master"`,
+		`os_addresses: ["http://opensearch:9200"]`,
+		`nats_conn_string: "nats://indexer-nats:4222"`,
+	} {
+		if !strings.Contains(config, expected) {
+			t.Fatalf("rendered search config missing %q", expected)
+		}
 	}
 }

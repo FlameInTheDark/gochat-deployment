@@ -629,6 +629,50 @@ api:
   tolerations: []
   affinity: {}
 
+search:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/flameinthedark/gochat-search
+    tag: "" # Overrides global.imageVariant when set
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3100
+  env: []
+  config: |
+    # Search
+    swagger: true
+    api_log: true
+    server_address: ":3100"
+
+    # Auth
+    auth_secret: "change_me_before_use_it_in_production"
+
+    # Cassandra
+    cluster: ["gochat-scylla"]
+    cluster_keyspace: "gochat"
+
+    # Redis
+    keydb: "gochat-keydb:6379"
+
+    # PostgreSQL
+    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    pg_retries: 5
+
+    # OpenSearch
+    os_insecure_skip_verify: true
+    os_addresses: ["http://gochat-opensearch:9200"]
+    os_username: "admin"
+    os_password: "CustOM-Pa55w0Rd"
+
+    # NATS
+    nats_conn_string: "nats://gochat-indexer-nats:4222"
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 ws:
   enabled: true
   replicaCount: 1
@@ -1073,6 +1117,10 @@ ingress:
           pathType: Prefix
           service: webhook
           port: 3200
+        - path: /api/v1/search
+          pathType: Prefix
+          service: search
+          port: 3100
         - path: /api/v1
           pathType: Prefix
           service: api

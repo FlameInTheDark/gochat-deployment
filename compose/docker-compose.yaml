@@ -102,6 +102,33 @@ services:
       - traefik.http.routers.api.entrypoints=web
       - traefik.http.services.api.loadbalancer.server.port=3100
 
+  search:
+    image: ${GOCHAT_IMAGE_SEARCH}
+    restart: unless-stopped
+    logging: *go-service-logging
+    environment: *otel-app-env
+    volumes:
+      - ../.generated/compose/config/search_config.yaml:/dist/config.yaml:ro
+    depends_on:
+      scylla:
+        condition: service_healthy
+      keydb:
+        condition: service_started
+      indexer-nats:
+        condition: service_started
+      citus-master:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
+      migrations:
+        condition: service_completed_successfully
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.search.rule=Host(`${APP_HOST}`) && PathPrefix(`/api/v1/search`)
+      - traefik.http.routers.search.priority=100
+      - traefik.http.routers.search.entrypoints=web
+      - traefik.http.services.search.loadbalancer.server.port=3100
+
   attachments:
     image: ${GOCHAT_IMAGE_ATTACHMENTS}
     restart: unless-stopped

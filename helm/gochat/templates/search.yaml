@@ -1,0 +1,70 @@
+{{- if .Values.search.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gochat.fullname" . }}-search
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "search") | nindent 4 }}
+spec:
+  type: {{ .Values.search.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.search.service.port }}
+      targetPort: {{ .Values.search.service.port }}
+  selector:
+    {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "search") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gochat.fullname" . }}-search
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "search") | nindent 4 }}
+spec:
+  replicas: {{ .Values.search.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "search") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "search") | nindent 8 }}
+    spec:
+      containers:
+        - name: search
+          image: "{{ .Values.search.image.repository }}:{{ default .Values.global.imageVariant .Values.search.image.tag }}"
+          imagePullPolicy: {{ .Values.search.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.search.service.port }}
+              name: http
+{{- if .Values.search.env }}
+          env:
+{{ toYaml .Values.search.env | indent 12 }}
+{{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /dist/config.yaml
+              subPath: config.yaml
+          resources:
+            {{- toYaml .Values.search.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "gochat.fullname" . }}-search-config
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.search.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.search.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.search.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

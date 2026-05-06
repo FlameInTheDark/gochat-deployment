@@ -12,6 +12,7 @@ func (e *Engine) renderOutputs(prepared *preparedOptions) (map[string]string, st
 		"api_config.yaml":               renderAPIConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://nats:4222", "nats://indexer-nats:4222", "http://etcd:2379"),
 		"auth_config.yaml":              renderAuthConfig(prepared, "keydb:6379", prepared.composePGDSN, "nats://nats:4222"),
 		"attachments_config.yaml":       renderAttachmentsConfig(prepared, "scylla", "nats://nats:4222", "keydb:6379", prepared.composePGDSN),
+		"search_config.yaml":            renderSearchConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://indexer-nats:4222"),
 		"ws_config.yaml":                renderWSConfig(prepared, "scylla", prepared.composePGDSN, "keydb:6379", "nats://nats:4222"),
 		"webhook_config.yaml":           renderWebhookConfig(prepared, "scylla", "keydb:6379", "nats://nats:4222", "http://etcd:2379"),
 		"stream_config.yaml":            renderStreamConfig(prepared, "global", `https://stream-global.example.com`, prepared.appPublicURL, prepared.telemetryPublicURL),
@@ -25,6 +26,7 @@ func (e *Engine) renderOutputs(prepared *preparedOptions) (map[string]string, st
 		"api":              renderAPIConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", helmPGDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-nats:4222", "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
 		"auth":             renderAuthConfig(prepared, prepared.helmFullName+"-keydb:6379", helmPGDSN, "nats://"+prepared.helmFullName+"-nats:4222"),
 		"attachments":      renderAttachmentsConfig(prepared, prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379", helmPGDSN),
+		"search":           renderSearchConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", helmPGDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-indexer-nats:4222"),
 		"ws":               renderWSConfig(prepared, prepared.helmFullName+"-scylla", helmPGDSN, prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222"),
 		"webhook":          renderWebhookConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
 		"indexer":          renderIndexerConfig(prepared, "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-opensearch:9200"),
@@ -77,6 +79,7 @@ func renderComposeEnv(prepared *preparedOptions) string {
 		"GOCHAT_IMAGE_API=" + prepared.imageAPI,
 		"GOCHAT_IMAGE_AUTH=" + prepared.imageAuth,
 		"GOCHAT_IMAGE_ATTACHMENTS=" + prepared.imageAttachments,
+		"GOCHAT_IMAGE_SEARCH=" + prepared.imageSearch,
 		"GOCHAT_IMAGE_WS=" + prepared.imageWS,
 		"GOCHAT_IMAGE_WEBHOOK=" + prepared.imageWebhook,
 		"GOCHAT_IMAGE_INDEXER=" + prepared.imageIndexer,
@@ -240,6 +243,38 @@ func renderAttachmentsConfig(prepared *preparedOptions, scyllaHost, natsAddr, ke
 		"pg_retries: 5",
 	)
 	return strings.Join(lines, "\n")
+}
+
+func renderSearchConfig(prepared *preparedOptions, scyllaHost, keydbAddr, pgDSN, opensearchAddr, natsAddr string) string {
+	return strings.Join([]string{
+		"# Search",
+		"swagger: false",
+		"api_log: true",
+		`server_address: ":3100"`,
+		"",
+		"# Auth",
+		fmt.Sprintf("auth_secret: %q", prepared.AuthSecret),
+		"",
+		"# Cassandra",
+		fmt.Sprintf("cluster: [%q]", scyllaHost),
+		`cluster_keyspace: "gochat"`,
+		"",
+		"# Redis",
+		fmt.Sprintf("keydb: %q", keydbAddr),
+		"",
+		"# PostgreSQL",
+		fmt.Sprintf("pg_dsn: %q", pgDSN),
+		"pg_retries: 5",
+		"",
+		"# OpenSearch",
+		"os_insecure_skip_verify: true",
+		fmt.Sprintf("os_addresses: [%q]", opensearchAddr),
+		`os_username: "admin"`,
+		fmt.Sprintf("os_password: %q", prepared.OpensearchAdminPassword),
+		"",
+		"# NATS",
+		fmt.Sprintf("nats_conn_string: %q", natsAddr),
+	}, "\n")
 }
 
 func renderWSConfig(prepared *preparedOptions, scyllaHost, pgDSN, keydbAddr, natsAddr string) string {
@@ -421,6 +456,10 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
         pathType: Prefix
         service: webhook
         port: 3200
+      - path: /api/v1/search
+        pathType: Prefix
+        service: search
+        port: 3100
       - path: /api/v1
         pathType: Prefix
         service: api
@@ -499,6 +538,23 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 		renderHelmOtelEnvBlock(prepared),
 		"  config: |",
 		indent(configs["attachments"], 4),
+		"",
+		"search:",
+		"  enabled: true",
+		"  replicaCount: 2",
+		"  image:",
+		"    repository: " + imageRepository(prepared.imageSearch),
+		fmt.Sprintf("    tag: %q", prepared.backendTag),
+		renderHelmOtelEnvBlock(prepared),
+		"  service:",
+		"    type: ClusterIP",
+		"    port: 3100",
+		"  config: |",
+		indent(configs["search"], 4),
+		"  resources: {}",
+		"  nodeSelector: {}",
+		"  tolerations: []",
+		"  affinity: {}",
 		"",
 		"ws:",
 		"  image:",

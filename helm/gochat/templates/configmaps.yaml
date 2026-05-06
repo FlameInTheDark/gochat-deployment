@@ -39,6 +39,21 @@ data:
 {{- end }}
 {{- end }}
 
+{{- if .Values.search.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gochat.fullname" . }}-search-config
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "search") | nindent 4 }}
+data:
+  config.yaml: |
+{{- with .Values.search.config }}
+{{ . | indent 4 }}
+{{- end }}
+{{- end }}
+
 {{- if .Values.ws.enabled }}
 ---
 apiVersion: v1

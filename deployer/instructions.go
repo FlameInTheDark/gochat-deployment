@@ -97,6 +97,7 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		fmt.Sprintf("- Auth password reset template: `%s`", filepath.Join(result.WorkspaceRoot, "compose", "templates", "password_reset.tmpl")),
 		fmt.Sprintf("- Auth MFA recovery template: `%s`", filepath.Join(result.WorkspaceRoot, "compose", "templates", "mfa_recovery.tmpl")),
 		fmt.Sprintf("- Attachments config: `%s`", filepath.Join(result.ComposeConfigRoot, "attachments_config.yaml")),
+		fmt.Sprintf("- Search config: `%s`", filepath.Join(result.ComposeConfigRoot, "search_config.yaml")),
 		fmt.Sprintf("- WS config: `%s`", filepath.Join(result.ComposeConfigRoot, "ws_config.yaml")),
 		fmt.Sprintf("- Webhook config: `%s`", filepath.Join(result.ComposeConfigRoot, "webhook_config.yaml")),
 		fmt.Sprintf("- External stream config: `%s`", filepath.Join(result.ComposeConfigRoot, "stream_config.yaml")),

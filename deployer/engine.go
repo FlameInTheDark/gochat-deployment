@@ -68,6 +68,7 @@ type preparedOptions struct {
 	imageAPI                string
 	imageAuth               string
 	imageAttachments        string
+	imageSearch             string
 	imageWS                 string
 	imageWebhook            string
 	imageIndexer            string
@@ -579,6 +580,7 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	prepared.imageAPI = imageRef(prepared.ImageRepositoryPrefix, "api", prepared.backendTag)
 	prepared.imageAuth = imageRef(prepared.ImageRepositoryPrefix, "auth", prepared.backendTag)
 	prepared.imageAttachments = imageRef(prepared.ImageRepositoryPrefix, "attachments", prepared.backendTag)
+	prepared.imageSearch = imageRef(prepared.ImageRepositoryPrefix, "search", prepared.backendTag)
 	prepared.imageWS = imageRef(prepared.ImageRepositoryPrefix, "ws", prepared.backendTag)
 	prepared.imageWebhook = imageRef(prepared.ImageRepositoryPrefix, "webhook", prepared.backendTag)
 	prepared.imageIndexer = imageRef(prepared.ImageRepositoryPrefix, "indexer", prepared.backendTag)
