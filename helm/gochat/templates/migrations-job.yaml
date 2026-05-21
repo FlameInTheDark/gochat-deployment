@@ -1,4 +1,6 @@
 {{- if .Values.migrations.enabled }}
+{{- $yb := .Values.relational.yugabyte -}}
+{{- $defaultYugabyte := printf "postgres://%s:%s@%s:%v/%s?sslmode=%s" $yb.user $yb.password $yb.host (int $yb.port) $yb.database $yb.sslMode -}}
 {{- $defaultPg := "" -}}
 {{- if .Values.citus.enabled -}}
   {{- $defaultPg = printf "postgres://%s:%s@%s-citus-master:%v/%s?sslmode=disable" .Values.citus.auth.postgresUser .Values.citus.auth.postgresPassword (include "gochat.fullname" .) (int .Values.citus.master.service.port) .Values.citus.auth.postgresDb -}}
@@ -34,8 +36,14 @@ spec:
           image: "{{ .Values.migrations.image.repository }}:{{ .Values.migrations.image.tag }}"
           imagePullPolicy: {{ .Values.migrations.image.pullPolicy }}
           env:
+            - name: MIGRATION_SCOPE
+              value: {{ .Values.migrations.scope | default "all" | quote }}
+            - name: YUGABYTE_ADDRESS
+              value: {{ default $defaultYugabyte .Values.migrations.yugabyteAddress | quote }}
             - name: PG_ADDRESS
-              value: {{ default $defaultPg .Values.migrations.pgAddress | quote }}
+              value: {{ default $defaultYugabyte .Values.migrations.pgAddress | quote }}
+            - name: CITUS_ADDRESS
+              value: {{ default $defaultPg .Values.migrations.citusAddress | quote }}
             - name: CASSANDRA_ADDRESS
               value: {{ default $defaultCassandra .Values.migrations.cassandraAddress | quote }}
           resources:

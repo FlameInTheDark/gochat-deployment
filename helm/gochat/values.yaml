@@ -9,6 +9,29 @@ imagePullSecrets: []
 routing:
   appHost: example.com
 
+relational:
+  provider: yugabyte
+  yugabyte:
+    host: yb-tservers.gochat-yb.svc.cluster.local
+    port: 5433
+    user: yugabyte
+    password: yugabyte
+    database: gochat
+    sslMode: disable
+    colocation: false
+
+yugabyteInit:
+  enabled: true
+  image:
+    repository: yugabytedb/yugabyte
+    tag: "2025.2.2.2-b11"
+    pullPolicy: IfNotPresent
+  backoffLimit: 6
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 scylla:
   enabled: true
   replicaCount: 1
@@ -143,8 +166,8 @@ auth:
     # Redis
     keydb: "gochat-keydb:6379"
 
-    # PostgreSQL
-    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    # YugabyteDB YSQL
+    pg_dsn: "host=yb-tservers.gochat-yb.svc.cluster.local port=5433 user=yugabyte password=yugabyte dbname=gochat sslmode=disable"
   emailTemplate: |
     <!DOCTYPE html>
     <html lang="en">
@@ -589,8 +612,8 @@ api:
     # Redis
     keydb: "gochat-keydb:6379"
 
-    # PostgreSQL
-    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    # YugabyteDB YSQL
+    pg_dsn: "host=yb-tservers.gochat-yb.svc.cluster.local port=5433 user=yugabyte password=yugabyte dbname=gochat sslmode=disable"
     pg_retries: 5
 
     # OpenSearch
@@ -656,8 +679,8 @@ search:
     # Redis
     keydb: "gochat-keydb:6379"
 
-    # PostgreSQL
-    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    # YugabyteDB YSQL
+    pg_dsn: "host=yb-tservers.gochat-yb.svc.cluster.local port=5433 user=yugabyte password=yugabyte dbname=gochat sslmode=disable"
     pg_retries: 5
 
     # OpenSearch
@@ -692,8 +715,8 @@ ws:
     cluster: ["gochat-scylla"]
     cluster_keyspace: "gochat"
 
-    # PostgreSQL
-    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    # YugabyteDB YSQL
+    pg_dsn: "host=yb-tservers.gochat-yb.svc.cluster.local port=5433 user=yugabyte password=yugabyte dbname=gochat sslmode=disable"
 
     # Cache Address (KeyDB)
     cache_addr: "gochat-keydb:6379"
@@ -794,8 +817,8 @@ attachments:
     s3_external_url: ""
     s3_use_ssl: false
 
-    # PostgreSQL (for setting active avatar)
-    pg_dsn: "host=gochat-citus-master port=5432 user=postgres dbname=gochat sslmode=disable"
+    # YugabyteDB YSQL (for setting active avatar)
+    pg_dsn: "host=yb-tservers.gochat-yb.svc.cluster.local port=5433 user=yugabyte password=yugabyte dbname=gochat sslmode=disable"
     pg_retries: 5
   resources: {}
   nodeSelector: {}
@@ -955,11 +978,14 @@ ui:
 
 migrations:
   enabled: true
+  scope: all
   image:
     repository: ghcr.io/flameinthedark/gochat-migrations
     tag: v1.9.0
     pullPolicy: IfNotPresent
+  yugabyteAddress: ""
   pgAddress: ""
+  citusAddress: ""
   cassandraAddress: ""
   backoffLimit: 5
   resources: {}
@@ -1035,6 +1061,8 @@ traefik:
   affinity: {}
 
 citus:
+  # Legacy source database. Keep enabled through the Citus -> YugabyteDB cutover
+  # window; disable only after export, import, verification, and smoke tests pass.
   enabled: true
   image:
     repository: citusdata/citus
@@ -1044,7 +1072,7 @@ citus:
     postgresUser: postgres
     postgresPassword: postgres
     postgresDb: gochat
-    hostAuthMethod: trust
+    hostAuthMethod: md5
   master:
     persistence:
       enabled: true

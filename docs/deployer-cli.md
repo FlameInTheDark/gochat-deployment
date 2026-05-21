@@ -174,7 +174,14 @@ If `--migrations-image-tag` is omitted, the deployer matches the migrations imag
 - `--auth-secret VALUE`
 - `--mfa-encryption-key VALUE`
 - `--webhook-jwt-secret VALUE`
-- `--postgres-password VALUE`
+- `--yugabyte-host HOST`
+- `--yugabyte-port PORT`
+- `--yugabyte-user VALUE`
+- `--yugabyte-password VALUE`
+- `--yugabyte-database VALUE`
+- `--yugabyte-sslmode VALUE`
+- `--postgres-password VALUE` for preserved legacy Citus only
+- `--disable-legacy-citus` after verified cutover only
 - `--etcd-root-password VALUE`
 - `--opensearch-admin-password VALUE`
 - `--openobserve-root-email VALUE`
@@ -184,6 +191,8 @@ OpenObserve admin email and password must be supplied explicitly for `render` an
 If `--mfa-encryption-key` is omitted, the deployer generates a base64-encoded 32-byte key and writes it into the rendered auth config plus deployment guide.
 The shared `--auth-secret` signs and validates both voice and stream media JWTs. External stream starter configs render this same value as `auth_secret`; webhook service tokens are still generated separately from `--webhook-jwt-secret`.
 
+YugabyteDB is the active relational store. Compose defaults to `yugabyte:5433`; Helm defaults to `yb-tservers.gochat-yb.svc.cluster.local:5433`, matching a YugabyteDB release named `yb` in namespace `gochat-yb`. Keep legacy Citus enabled until Voyager export/import, row-count/checksum verification, schema version checks, and application smoke tests pass.
+
 ## Compose Target
 
 `check --deployment-type compose` requires:
@@ -191,6 +200,7 @@ The shared `--auth-secret` signs and validates both voice and stream media JWTs.
 - `docker`
 
 Compose always uses bundled Traefik and HTTP public URLs.
+Compose starts YugabyteDB with persistent `yugabyte-data` storage and creates the `gochat` database idempotently with `COLOCATION=false`. Legacy Citus remains available with `docker compose --profile legacy-citus ...`; do not remove the `citus-data` volume during migration.
 
 ## Helm Target
 
@@ -215,6 +225,7 @@ Optional:
 - `kubectl`
 
 Helm defaults to TLS-aware public URLs, bundled OpenObserve/OTEL, and an in-cluster UI build from the frontend repo tag.
+Install YugabyteDB separately with the official YugabyteDB Helm chart, then point `--yugabyte-host`, `--yugabyte-port`, `--yugabyte-user`, and `--yugabyte-password` at the YSQL service. The GoChat chart only creates/checks the target database and never drops or recreates it.
 
 If `--ingress-class-name` is set and `--bundled-traefik` is not forced on, the deployer auto-disables bundled Traefik and renders the separate websocket ingresses needed for ingress-nginx style clusters.
 

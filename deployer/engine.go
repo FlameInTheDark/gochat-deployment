@@ -51,6 +51,10 @@ type preparedOptions struct {
 	helmFullName            string
 	composePGAddr           string
 	composePGDSN            string
+	yugabyteAddress         string
+	yugabyteDSN             string
+	citusAddress            string
+	legacyCitusEnabled      bool
 	composeCassandraAddr    string
 	openObserveRootEmail    string
 	openObserveRootPassword string
@@ -436,6 +440,28 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	if opts.PostgresPassword == "" {
 		opts.PostgresPassword = randomSecret(32)
 	}
+	if opts.YugabytePort == 0 {
+		opts.YugabytePort = 5433
+	}
+	if strings.TrimSpace(opts.YugabyteUser) == "" {
+		opts.YugabyteUser = "yugabyte"
+	}
+	if strings.TrimSpace(opts.YugabytePassword) == "" {
+		opts.YugabytePassword = "yugabyte"
+	}
+	if strings.TrimSpace(opts.YugabyteDatabase) == "" {
+		opts.YugabyteDatabase = "gochat"
+	}
+	if strings.TrimSpace(opts.YugabyteSSLMode) == "" {
+		opts.YugabyteSSLMode = "disable"
+	}
+	if strings.TrimSpace(opts.YugabyteHost) == "" {
+		if opts.DeploymentType == DeploymentHelm {
+			opts.YugabyteHost = "yb-tservers.gochat-yb.svc.cluster.local"
+		} else {
+			opts.YugabyteHost = "yugabyte"
+		}
+	}
 	if opts.EtcdRootPassword == "" {
 		opts.EtcdRootPassword = randomSecret(24)
 	}
@@ -575,6 +601,7 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 		originFromURL(prepared.apiPublicBaseURL),
 	})
 	prepared.helmFullName = helmFullName(prepared.ReleaseName)
+	prepared.legacyCitusEnabled = !prepared.DisableLegacyCitus
 	prepared.backendTag = prepared.BackendTag
 	prepared.frontendTag = prepared.FrontendTag
 	prepared.imageAPI = imageRef(prepared.ImageRepositoryPrefix, "api", prepared.backendTag)
@@ -588,9 +615,12 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	prepared.imageTelemetryGateway = imageRef(prepared.ImageRepositoryPrefix, "telemetry-gateway", prepared.backendTag)
 	prepared.imageUI = uiImageRef(prepared.ImageRepositoryPrefix, prepared.frontendTag)
 	prepared.imageMigrations = fmt.Sprintf("%s:%s", strings.TrimRight(prepared.MigrationsImageRepo, ":"), prepared.MigrationsImageTag)
-	prepared.composePGAddr = fmt.Sprintf("postgres://postgres:%s@citus-master:5432/gochat?sslmode=disable", prepared.PostgresPassword)
+	prepared.yugabyteAddress = yugabyteURL(prepared.YugabyteUser, prepared.YugabytePassword, prepared.YugabyteHost, prepared.YugabytePort, prepared.YugabyteDatabase, prepared.YugabyteSSLMode)
+	prepared.yugabyteDSN = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s", prepared.YugabyteHost, prepared.YugabytePort, prepared.YugabyteUser, prepared.YugabytePassword, prepared.YugabyteDatabase, prepared.YugabyteSSLMode)
+	prepared.citusAddress = fmt.Sprintf("postgres://postgres:%s@citus-master:5432/gochat?sslmode=disable", prepared.PostgresPassword)
+	prepared.composePGAddr = prepared.yugabyteAddress
 	prepared.composeCassandraAddr = "cassandra://scylla:9042/gochat?x-multi-statement=true"
-	prepared.composePGDSN = fmt.Sprintf("host=citus-master port=5432 user=postgres password=%s dbname=gochat sslmode=disable", prepared.PostgresPassword)
+	prepared.composePGDSN = prepared.yugabyteDSN
 	prepared.openObserveRootEmail = prepared.OpenObserveRootEmail
 	prepared.openObserveRootPassword = prepared.OpenObserveRootPassword
 	prepared.openObserveOrg = "default"
@@ -651,6 +681,19 @@ func helmCommandEnv(workspaceRoot string) []string {
 		return nil
 	}
 	return []string{"DOCKER_CONFIG=" + dockerConfigRoot}
+}
+
+func yugabyteURL(user, password, host string, port int, database, sslMode string) string {
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(user, password),
+		Host:   fmt.Sprintf("%s:%d", host, port),
+		Path:   "/" + strings.TrimPrefix(database, "/"),
+	}
+	query := u.Query()
+	query.Set("sslmode", sslMode)
+	u.RawQuery = query.Encode()
+	return u.String()
 }
 
 func composeDeployCommand(prepared *preparedOptions, result RenderResult) string {

@@ -41,7 +41,11 @@ func TestRenderHelmValuesIncludesFrontendURLs(t *testing.T) {
 		`VITE_BASE_PATH: "/"`,
 		`repository: https://github.com/FlameInTheDark/gochat-react.git`,
 		`ref: "v2.3.4"`,
-		"migrations:\n  image:\n    repository: ghcr.io/flameinthedark/gochat-migrations\n    tag: \"v1.2.3\"",
+		"migrations:\n  scope: \"all\"\n  image:\n    repository: ghcr.io/flameinthedark/gochat-migrations\n    tag: \"v1.2.3\"",
+		"relational:\n  provider: \"yugabyte\"\n  yugabyte:\n    host: \"yb-tservers.gochat-yb.svc.cluster.local\"\n    port: 5433",
+		"    colocation: false",
+		"yugabyteInit:\n  enabled: true\n  image:\n    repository: yugabytedb/yugabyte\n    tag: \"2025.2.2.2-b11\"",
+		"citus:\n  enabled: true\n  auth:",
 	} {
 		if !strings.Contains(values, expected) {
 			t.Fatalf("rendered values missing %q", expected)
@@ -127,7 +131,7 @@ func TestRenderAuthConfigIncludesProviderSpecificSecrets(t *testing.T) {
 		t.Fatalf("prepareOptions returned error: %v", err)
 	}
 
-	config := renderAuthConfig(prepared, "keydb:6379", "host=citus-master", "nats://nats:4222")
+	config := renderAuthConfig(prepared, "keydb:6379", prepared.composePGDSN, "nats://nats:4222")
 	for _, expected := range []string{
 		`email_provider: "sendpulse"`,
 		`mfa_encryption_key: "`,
@@ -158,7 +162,7 @@ func TestRenderAPIConfigIncludesAttachmentDefaults(t *testing.T) {
 		t.Fatalf("prepareOptions returned error: %v", err)
 	}
 
-	config := renderAPIConfig(prepared, "scylla", "keydb:6379", "host=citus-master", "http://opensearch:9200", "nats://nats:4222", "nats://indexer:4222", "http://etcd:2379")
+	config := renderAPIConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://nats:4222", "nats://indexer:4222", "http://etcd:2379")
 	for _, expected := range []string{
 		"upload_limit: 50000000",
 		"attachment_ttl_minutes: 10",
@@ -232,7 +236,7 @@ func TestRenderWSConfigIncludesNATSForHelm(t *testing.T) {
 		t.Fatalf("prepareOptions returned error: %v", err)
 	}
 
-	config := renderWSConfig(prepared, "gochat-scylla", "host=gochat-citus-master", "gochat-keydb:6379", "nats://gochat-nats:4222")
+	config := renderWSConfig(prepared, "gochat-scylla", prepared.yugabyteDSN, "gochat-keydb:6379", "nats://gochat-nats:4222")
 	for _, expected := range []string{
 		`nats_conn_string: "nats://gochat-nats:4222"`,
 		`cache_addr: "gochat-keydb:6379"`,
@@ -273,6 +277,15 @@ func TestRenderComposeEnvIncludesObservabilityValues(t *testing.T) {
 		"GOCHAT_IMAGE_TELEMETRY_GATEWAY=ghcr.io/flameinthedark/gochat-telemetry-gateway:v1.2.3",
 		"GOCHAT_IMAGE_SEARCH=ghcr.io/flameinthedark/gochat-search:v1.2.3",
 		"GOCHAT_IMAGE_MIGRATIONS=ghcr.io/flameinthedark/gochat-migrations:v1.2.3",
+		"YUGABYTE_HOST=yugabyte",
+		"YUGABYTE_PORT=5433",
+		"YUGABYTE_USER=yugabyte",
+		"YUGABYTE_PASSWORD=yugabyte",
+		"YUGABYTE_DB=gochat",
+		"YUGABYTE_COLOCATION=false",
+		"YUGABYTE_ADDRESS=postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable",
+		"PG_ADDRESS=postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable",
+		"CITUS_ADDRESS=postgres://postgres:",
 	} {
 		if !strings.Contains(env, expected) {
 			t.Fatalf("rendered compose env missing %q", expected)
@@ -326,13 +339,13 @@ func TestRenderSearchConfigUsesIndexerNATSAndStores(t *testing.T) {
 		t.Fatalf("prepareOptions returned error: %v", err)
 	}
 
-	config := renderSearchConfig(prepared, "scylla", "keydb:6379", "host=citus-master", "http://opensearch:9200", "nats://indexer-nats:4222")
+	config := renderSearchConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://indexer-nats:4222")
 	for _, expected := range []string{
 		`server_address: ":3100"`,
 		`auth_secret: "app-secret"`,
 		`cluster: ["scylla"]`,
 		`keydb: "keydb:6379"`,
-		`pg_dsn: "host=citus-master"`,
+		`pg_dsn: "host=yugabyte port=5433 user=yugabyte password=yugabyte dbname=gochat sslmode=disable"`,
 		`os_addresses: ["http://opensearch:9200"]`,
 		`nats_conn_string: "nats://indexer-nats:4222"`,
 	} {

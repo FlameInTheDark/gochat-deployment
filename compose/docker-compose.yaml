@@ -62,8 +62,8 @@ services:
         condition: service_started
       nats:
         condition: service_started
-      citus-master:
-        condition: service_healthy
+      yugabyte-init:
+        condition: service_completed_successfully
       migrations:
         condition: service_completed_successfully
     labels:
@@ -116,8 +116,8 @@ services:
         condition: service_started
       indexer-nats:
         condition: service_started
-      citus-master:
-        condition: service_healthy
+      yugabyte-init:
+        condition: service_completed_successfully
       opensearch:
         condition: service_started
       migrations:
@@ -143,8 +143,8 @@ services:
         condition: service_started
       nats:
         condition: service_started
-      citus-master:
-        condition: service_healthy
+      yugabyte-init:
+        condition: service_completed_successfully
       migrations:
         condition: service_completed_successfully
     labels:
@@ -168,8 +168,8 @@ services:
         condition: service_started
       nats:
         condition: service_started
-      citus-master:
-        condition: service_healthy
+      yugabyte-init:
+        condition: service_completed_successfully
       migrations:
         condition: service_completed_successfully
     labels:
@@ -239,10 +239,13 @@ services:
   migrations:
     image: ${GOCHAT_IMAGE_MIGRATIONS}
     environment:
-      PG_ADDRESS: ${PG_ADDRESS:-postgres://postgres:postgres@citus-master:5432/gochat?sslmode=disable}
+      MIGRATION_SCOPE: ${MIGRATION_SCOPE:-all}
+      YUGABYTE_ADDRESS: ${YUGABYTE_ADDRESS:-postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable}
+      PG_ADDRESS: ${PG_ADDRESS:-postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable}
+      CITUS_ADDRESS: ${CITUS_ADDRESS:-postgres://postgres:postgres@citus-master:5432/gochat?sslmode=disable}
       CASSANDRA_ADDRESS: ${CASSANDRA_ADDRESS:-cassandra://scylla:9042/gochat?x-multi-statement=true}
     depends_on:
-      citus-init:
+      yugabyte-init:
         condition: service_completed_successfully
       scylla:
         condition: service_healthy
@@ -274,14 +277,76 @@ services:
     image: ${KEYDB_IMAGE:-eqalpha/keydb:alpine}
     restart: unless-stopped
 
+  yugabyte:
+    image: ${YUGABYTE_IMAGE:-yugabytedb/yugabyte:2025.2.2.2-b11}
+    hostname: yugabyte
+    command:
+      - bin/yugabyted
+      - start
+      - --base_dir=/home/yugabyte/yb_data
+      - --background=false
+    restart: unless-stopped
+    ports:
+      - "${YUGABYTE_YSQL_PORT:-5433}:5433"
+      - "${YUGABYTE_UI_PORT:-15433}:15433"
+    volumes:
+      - yugabyte-data:/home/yugabyte/yb_data
+    healthcheck:
+      test: ["CMD-SHELL", "/home/yugabyte/bin/ysqlsh -h 127.0.0.1 -p 5433 -U yugabyte -d yugabyte -c 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  yugabyte-init:
+    image: ${YUGABYTE_IMAGE:-yugabytedb/yugabyte:2025.2.2.2-b11}
+    restart: "no"
+    depends_on:
+      yugabyte:
+        condition: service_healthy
+    environment:
+      YUGABYTE_HOST: ${YUGABYTE_HOST:-yugabyte}
+      YUGABYTE_PORT: ${YUGABYTE_PORT:-5433}
+      YUGABYTE_USER: ${YUGABYTE_USER:-yugabyte}
+      YUGABYTE_PASSWORD: ${YUGABYTE_PASSWORD:-yugabyte}
+      YUGABYTE_DB: ${YUGABYTE_DB:-gochat}
+      YUGABYTE_COLOCATION: ${YUGABYTE_COLOCATION:-false}
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        db_name_re='^[A-Za-z_][A-Za-z0-9_]*$'
+        if [[ ! "$$YUGABYTE_DB" =~ $$db_name_re ]]; then
+          echo "Invalid YUGABYTE_DB '$$YUGABYTE_DB'. Use a simple SQL identifier." >&2
+          exit 1
+        fi
+
+        export PGPASSWORD="$$YUGABYTE_PASSWORD"
+        until /home/yugabyte/bin/ysqlsh -h "$$YUGABYTE_HOST" -p "$$YUGABYTE_PORT" -U "$$YUGABYTE_USER" -d yugabyte -c 'SELECT 1' >/dev/null 2>&1; do
+          sleep 2
+        done
+
+        if /home/yugabyte/bin/ysqlsh -h "$$YUGABYTE_HOST" -p "$$YUGABYTE_PORT" -U "$$YUGABYTE_USER" -d yugabyte -tAc "SELECT 1 FROM pg_database WHERE datname = '$$YUGABYTE_DB'" | grep -q 1; then
+          echo "YugabyteDB database '$$YUGABYTE_DB' already exists; leaving it untouched."
+          /home/yugabyte/bin/ysqlsh -h "$$YUGABYTE_HOST" -p "$$YUGABYTE_PORT" -U "$$YUGABYTE_USER" -d "$$YUGABYTE_DB" -tAc 'SELECT yb_is_database_colocated();' | awk '{print "Existing database colocation: " $0}'
+          exit 0
+        fi
+
+        colocation="false"
+        if [[ "$$YUGABYTE_COLOCATION" == "true" ]]; then
+          colocation="true"
+        fi
+
+        /home/yugabyte/bin/ysqlsh -h "$$YUGABYTE_HOST" -p "$$YUGABYTE_PORT" -U "$$YUGABYTE_USER" -d yugabyte -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$$YUGABYTE_DB\" WITH COLOCATION = $$colocation;"
+
   citus-master:
     image: ${CITUS_IMAGE:-citusdata/citus:13.0.3}
+    profiles: ["legacy-citus"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-gochat}
-      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-trust}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-md5}
     volumes:
       - citus-data:/var/lib/postgresql/data
     healthcheck:
@@ -292,6 +357,7 @@ services:
 
   citus-init:
     image: ${POSTGRES_CLIENT_IMAGE:-postgres:15-alpine}
+    profiles: ["legacy-citus"]
     restart: "no"
     depends_on:
       citus-master:
@@ -456,6 +522,7 @@ services:
 
 volumes:
   citus-data:
+  yugabyte-data:
   minio-data:
   openobserve-data:
   opensearch-data:

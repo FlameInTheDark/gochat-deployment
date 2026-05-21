@@ -16,6 +16,7 @@ You do not need to prepare those repositories manually before deploying. The dep
 - Interactive terminal wizard and explicit CLI modes
 - Docker Compose for single-host installs
 - Helm for Kubernetes installs
+- YugabyteDB YSQL as the active relational store, with legacy Citus preserved for verified cutover and rollback
 - Automatic backend and frontend tag resolution
 - Version-matched `gochat-migrations` container for deploy and update flows
 - Built-in OpenObserve, OpenTelemetry Collector, and external SFU telemetry gateway wiring
@@ -233,8 +234,9 @@ The generated guide contains:
 ## Notes
 
 - Compose uses published container images from `ghcr.io/flameinthedark`.
+- Compose starts YugabyteDB `2025.2.2.2-b11` on YSQL port `5433` with a persistent `yugabyte-data` volume. Legacy Citus is kept behind the explicit `legacy-citus` profile so the old volume is not deleted or overwritten.
 - Compose still uses the published frontend image, so deployment-specific frontend URL behavior must be present in that image.
-- Helm defaults to TLS-aware public URLs, bundled OpenObserve and OTEL, and an in-cluster UI build from the frontend repo tag.
+- Helm defaults to TLS-aware public URLs, bundled OpenObserve and OTEL, an in-cluster UI build from the frontend repo tag, and a YugabyteDB YSQL target. Install YugabyteDB with the official YugabyteDB Helm chart before applying GoChat.
 - If you set an ingress class and do not force bundled Traefik on, the deployer auto-disables bundled Traefik and renders ingress-nginx friendly websocket routing.
 - OpenObserve admin email and password must be supplied explicitly for `render`, `deploy`, and the wizard.
 - Compose exposes OpenSearch Dashboards on `${OPENSEARCH_DASHBOARDS_PORT:-5601}`.
@@ -248,3 +250,4 @@ The generated guide contains:
 - CLI reference: [docs/deployer-cli.md](docs/deployer-cli.md)
 - Helm configuration: [docs/helm-configuration.md](docs/helm-configuration.md)
 - Compose environment: [docs/compose-environment.md](docs/compose-environment.md)
+- Citus to YugabyteDB migration: [docs/yugabyte-migration.md](docs/yugabyte-migration.md)

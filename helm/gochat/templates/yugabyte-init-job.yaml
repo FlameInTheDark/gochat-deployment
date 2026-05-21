@@ -1,0 +1,110 @@
+{{- if .Values.yugabyteInit.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gochat.fullname" . }}-yugabyte-init
+  labels:
+    {{- include "gochat.componentLabels" (dict "Context" . "Component" "yugabyte-init") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.yugabyteInit.backoffLimit | default 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gochat.componentSelectorLabels" (dict "Context" . "Component" "yugabyte-init") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: yugabyte-init
+          image: "{{ .Values.yugabyteInit.image.repository }}:{{ .Values.yugabyteInit.image.tag }}"
+          imagePullPolicy: {{ .Values.yugabyteInit.image.pullPolicy }}
+          env:
+            - name: PGPASSWORD
+              value: {{ .Values.relational.yugabyte.password | quote }}
+            - name: YUGABYTE_HOST
+              value: {{ .Values.relational.yugabyte.host | quote }}
+            - name: YUGABYTE_PORT
+              value: {{ .Values.relational.yugabyte.port | quote }}
+            - name: YUGABYTE_USER
+              value: {{ .Values.relational.yugabyte.user | quote }}
+            - name: YUGABYTE_DB
+              value: {{ .Values.relational.yugabyte.database | quote }}
+            - name: YUGABYTE_COLOCATION
+              value: {{ .Values.relational.yugabyte.colocation | quote }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              if [[ ! "$YUGABYTE_DB" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+                echo "YUGABYTE_DB must be a simple SQL identifier" >&2
+                exit 1
+              fi
+
+              case "${YUGABYTE_COLOCATION,,}" in
+                true|1|yes|on) co_location_sql="true" ;;
+                false|0|no|off) co_location_sql="false" ;;
+                *) echo "YUGABYTE_COLOCATION must be true or false" >&2; exit 1 ;;
+              esac
+
+              until /home/yugabyte/bin/ysqlsh \
+                -h "$YUGABYTE_HOST" \
+                -p "$YUGABYTE_PORT" \
+                -U "$YUGABYTE_USER" \
+                -d yugabyte \
+                -c "SELECT 1" >/dev/null 2>&1; do
+                sleep 2
+              done
+
+              if /home/yugabyte/bin/ysqlsh \
+                -h "$YUGABYTE_HOST" \
+                -p "$YUGABYTE_PORT" \
+                -U "$YUGABYTE_USER" \
+                -d yugabyte \
+                -Atc "SELECT 1 FROM pg_database WHERE datname = '$YUGABYTE_DB'" | grep -q '^1$'; then
+                echo "YugabyteDB database '$YUGABYTE_DB' already exists"
+                existing_colocated="$(/home/yugabyte/bin/ysqlsh \
+                  -h "$YUGABYTE_HOST" \
+                  -p "$YUGABYTE_PORT" \
+                  -U "$YUGABYTE_USER" \
+                  -d "$YUGABYTE_DB" \
+                  -Atc "SELECT yb_is_database_colocated()")"
+                if [[ "$existing_colocated" == "t" ]]; then
+                  echo "YugabyteDB database '$YUGABYTE_DB' is colocated"
+                else
+                  echo "YugabyteDB database '$YUGABYTE_DB' is not colocated"
+                fi
+                if [[ "$co_location_sql" == "false" && "$existing_colocated" == "t" ]]; then
+                  echo "YugabyteDB database '$YUGABYTE_DB' is colocated but high-load GoChat expects COLOCATION=false; create a new target database and migrate into it" >&2
+                fi
+              else
+                /home/yugabyte/bin/ysqlsh \
+                  -h "$YUGABYTE_HOST" \
+                  -p "$YUGABYTE_PORT" \
+                  -U "$YUGABYTE_USER" \
+                  -d yugabyte \
+                  -v ON_ERROR_STOP=1 \
+                  -c "CREATE DATABASE \"$YUGABYTE_DB\" WITH COLOCATION = $co_location_sql"
+                echo "Created YugabyteDB database '$YUGABYTE_DB' with colocation=$co_location_sql"
+              fi
+          resources:
+            {{- toYaml .Values.yugabyteInit.resources | nindent 12 }}
+      {{- with .Values.yugabyteInit.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.yugabyteInit.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.yugabyteInit.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

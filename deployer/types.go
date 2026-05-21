@@ -78,6 +78,13 @@ type Options struct {
 	MFAEncryptionKey        string
 	WebhookJWTSecret        string
 	PostgresPassword        string
+	YugabyteHost            string
+	YugabytePort            int
+	YugabyteUser            string
+	YugabytePassword        string
+	YugabyteDatabase        string
+	YugabyteSSLMode         string
+	DisableLegacyCitus      bool
 	EtcdRootPassword        string
 	OpensearchAdminPassword string
 	OpenObserveRootEmail    string

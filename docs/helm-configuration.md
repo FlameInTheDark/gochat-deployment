@@ -17,6 +17,23 @@ The wrapper generates `.generated/helm/values.generated.yaml` and installs the c
 - ingress controller strategy:
   - existing ingress controller
   - bundled Traefik
+- YugabyteDB YSQL service host, port, user, password, database, and sslmode
+
+## YugabyteDB YSQL
+
+GoChat now uses YugabyteDB YSQL as the active relational store. Install YugabyteDB with the official YugabyteDB Helm chart before applying this chart. The default GoChat values expect a YugabyteDB release named `yb` in namespace `gochat-yb`, which exposes YSQL through `yb-tservers.gochat-yb.svc.cluster.local:5433`.
+
+For extreme highload, keep `relational.yugabyte.colocation=false`. This creates a non-colocated database so large guild, channel, membership, invite, and role tables can split and rebalance across tablets and nodes instead of being pinned into one colocated tablet.
+
+The GoChat chart includes a `yugabyte-init` Helm hook that:
+
+- waits for YSQL,
+- creates the `gochat` database only if it is missing,
+- uses `CREATE DATABASE ... WITH COLOCATION = false`,
+- reports existing database colocation state,
+- never drops or recreates an existing database.
+
+Legacy Citus templates remain enabled by default as migration source material. Disable them only after Voyager export/import, `gctools yugabyte verify`, schema version checks, and smoke tests pass.
 
 ## Storage Notes
 
@@ -61,7 +78,7 @@ The generated override file pins:
 - rendered config blocks for API/auth/attachments/ws/webhook/indexer/embedder
 - a generated `.generated/compose/config/stream_config.yaml` starter file for the first external stream node, with `dave_allow_av1: false` by default for DAVE-encrypted stream compatibility
 - rendered telemetry gateway image, config, and ingress host
-- PostgreSQL, etcd, and OpenSearch secrets
+- YugabyteDB YSQL, preserved legacy Citus, etcd, and OpenSearch secrets
 - ingress host rules for app, storage, and MinIO console
 - MinIO credentials and bucket settings when enabled
 

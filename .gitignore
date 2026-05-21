@@ -10,3 +10,10 @@ gochat-deployer
 *.exe
 node_modules/
 /.claude/settings.local.json
+voyager-export*/
+yb-voyager-export*/
+*.dump
+*.sql.dump
+*.backup
+*migration-report*/
+*migration-reports*/
