@@ -1,4 +1,5 @@
-{{- if and .Values.scylla.enabled .Values.scylla.lifecycle.createKeyspace.enabled }}
+{{- $keyspaceHost := default (printf "%s-scylla" (include "gochat.fullname" .)) .Values.scylla.lifecycle.createKeyspace.host -}}
+{{- if and .Values.scylla.lifecycle.createKeyspace.enabled (or .Values.scylla.enabled .Values.scylla.lifecycle.createKeyspace.host) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -29,11 +30,15 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until cqlsh {{ include "gochat.fullname" . }}-scylla -e "DESCRIBE KEYSPACES" >/dev/null 2>&1; do
+              until cqlsh {{ $keyspaceHost | quote }} -e "DESCRIBE KEYSPACES" >/dev/null 2>&1; do
                 echo "Waiting for ScyllaDB to start..."
                 sleep 5
               done
-              cqlsh {{ include "gochat.fullname" . }}-scylla -e "CREATE KEYSPACE IF NOT EXISTS {{ .Values.scylla.lifecycle.createKeyspace.keyspace }} WITH replication = {'class': '{{ .Values.scylla.lifecycle.createKeyspace.replicationClass }}', 'replication_factor': {{ .Values.scylla.lifecycle.createKeyspace.replicationFactor }} };"
+              {{- if eq .Values.scylla.lifecycle.createKeyspace.replicationClass "NetworkTopologyStrategy" }}
+              cqlsh {{ $keyspaceHost | quote }} -e "CREATE KEYSPACE IF NOT EXISTS {{ .Values.scylla.lifecycle.createKeyspace.keyspace }} WITH replication = {'class': 'NetworkTopologyStrategy', '{{ .Values.scylla.lifecycle.createKeyspace.datacenter }}': {{ .Values.scylla.lifecycle.createKeyspace.replicationFactor }} };"
+              {{- else }}
+              cqlsh {{ $keyspaceHost | quote }} -e "CREATE KEYSPACE IF NOT EXISTS {{ .Values.scylla.lifecycle.createKeyspace.keyspace }} WITH replication = {'class': '{{ .Values.scylla.lifecycle.createKeyspace.replicationClass }}', 'replication_factor': {{ .Values.scylla.lifecycle.createKeyspace.replicationFactor }} };"
+              {{- end }}
           resources:
             {{- toYaml .Values.scylla.resources | nindent 12 }}
       {{- with .Values.scylla.nodeSelector }}

@@ -70,6 +70,9 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		"## Commands",
 		"",
 		fmt.Sprintf("- Docker Compose update: `%s`", result.ComposeDeployCommand),
+		fmt.Sprintf("- Scylla Operator update: `%s`", result.ScyllaOperatorDeployCommand),
+		fmt.Sprintf("- ScyllaDB update: `%s`", result.ScyllaDeployCommand),
+		fmt.Sprintf("- YugabyteDB update: `%s`", result.YugabyteDeployCommand),
 		fmt.Sprintf("- Helm update: `%s`", result.HelmDeployCommand),
 	)
 	if prepared.DeploymentType == DeploymentCompose {
@@ -107,6 +110,8 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		fmt.Sprintf("- Compose file: `%s`", result.ComposeFilePath),
 		fmt.Sprintf("- Helm chart: `%s`", result.HelmChartPath),
 		fmt.Sprintf("- Helm values: `%s`", result.HelmValuesPath),
+		fmt.Sprintf("- ScyllaDB values: `%s`", result.ScyllaValuesPath),
+		fmt.Sprintf("- YugabyteDB values: `%s`", result.YugabyteValuesPath),
 	)
 
 	lines = append(lines,
@@ -121,10 +126,14 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		fmt.Sprintf("- YugabyteDB YSQL password: `%s`", prepared.YugabytePassword),
 		fmt.Sprintf("- YugabyteDB YSQL database: `%s`", prepared.YugabyteDatabase),
 		fmt.Sprintf("- YugabyteDB YSQL sslmode: `%s`", prepared.YugabyteSSLMode),
-		fmt.Sprintf("- Legacy Citus preserved by chart: `%s`", boolText(prepared.legacyCitusEnabled)),
-		"- Legacy Citus user: `postgres`",
-		fmt.Sprintf("- Legacy Citus password: `%s`", prepared.PostgresPassword),
-		"- Legacy Citus database: `gochat`",
+		fmt.Sprintf("- YugabyteDB namespace/release: `%s/%s`", prepared.YugabyteNamespace, prepared.YugabyteReleaseName),
+		fmt.Sprintf("- YugabyteDB tserver nodes: `%d`", prepared.YugabyteTServerCount),
+		fmt.Sprintf("- YugabyteDB replication factor: `%d`", prepared.YugabyteReplicationFactor),
+		fmt.Sprintf("- ScyllaDB contact points: `%s`", prepared.ScyllaHosts),
+		fmt.Sprintf("- ScyllaDB namespace/release: `%s/%s`", prepared.ScyllaNamespace, prepared.ScyllaReleaseName),
+		fmt.Sprintf("- ScyllaDB nodes: `%d`", prepared.ScyllaNodeCount),
+		fmt.Sprintf("- ScyllaDB keyspace replication factor: `%d`", prepared.ScyllaReplicationFactor),
+		fmt.Sprintf("- ScyllaDB datacenter: `%s`", prepared.ScyllaDatacenter),
 		"- etcd user: `root`",
 		fmt.Sprintf("- etcd password: `%s`", prepared.EtcdRootPassword),
 		"- OpenSearch user: `admin`",
@@ -218,11 +227,14 @@ func renderDeploymentGuide(prepared *preparedOptions, result RenderResult) strin
 		"",
 		"- Schema migrations run from the version-matched `gochat-migrations` image by default.",
 		"- The active relational store is YugabyteDB YSQL. The chart creates the target database idempotently with `COLOCATION = false` and never drops or recreates existing databases.",
-		"- Keep legacy Citus enabled until Voyager export/import, `gctools yugabyte verify`, and application smoke tests have passed.",
+		"- Helm renders separate values files for ScyllaDB and YugabyteDB so database node counts and replication factors stay explicit.",
+		"- Helm application configs point at the operator-managed ScyllaDB client service by default. Cut over only after the clustered ScyllaDB data copy and row-count verification pass.",
 		"- OpenObserve bootstrap assets live in `monitoring/openobserve/`.",
 	)
 	if prepared.DeploymentType == DeploymentHelm {
 		lines = append(lines,
+			"- Helm dependency commands are ordered as Scylla Operator, ScyllaDB, YugabyteDB, then the GoChat app chart.",
+			"- Helm app upgrades use reset values so removed chart keys do not linger in release state.",
 			"- Helm renders app OTEL env, an OpenObserve instance, the collector, and the public telemetry gateway by default.",
 			"- Helm renders the public websocket endpoint as `/ws` and enables the alias ingress needed for ingress-nginx style setups.",
 			"- Helm renders the UI as an in-cluster build from the frontend repo tag instead of depending on a prebuilt UI image.",

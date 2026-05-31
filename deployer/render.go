@@ -9,27 +9,27 @@ const defaultOTELMetricExportInterval = "60000"
 
 func (e *Engine) renderOutputs(prepared *preparedOptions) (map[string]string, string) {
 	composeConfigs := map[string]string{
-		"api_config.yaml":               renderAPIConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://nats:4222", "nats://indexer-nats:4222", "http://etcd:2379"),
+		"api_config.yaml":               renderAPIConfig(prepared, prepared.composeScyllaHosts, "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://nats:4222", "nats://indexer-nats:4222", "http://etcd:2379"),
 		"auth_config.yaml":              renderAuthConfig(prepared, "keydb:6379", prepared.composePGDSN, "nats://nats:4222"),
-		"attachments_config.yaml":       renderAttachmentsConfig(prepared, "scylla", "nats://nats:4222", "keydb:6379", prepared.composePGDSN),
-		"search_config.yaml":            renderSearchConfig(prepared, "scylla", "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://indexer-nats:4222"),
-		"ws_config.yaml":                renderWSConfig(prepared, "scylla", prepared.composePGDSN, "keydb:6379", "nats://nats:4222"),
-		"webhook_config.yaml":           renderWebhookConfig(prepared, "scylla", "keydb:6379", "nats://nats:4222", "http://etcd:2379"),
+		"attachments_config.yaml":       renderAttachmentsConfig(prepared, prepared.composeScyllaHosts, "nats://nats:4222", "keydb:6379", prepared.composePGDSN),
+		"search_config.yaml":            renderSearchConfig(prepared, prepared.composeScyllaHosts, "keydb:6379", prepared.composePGDSN, "http://opensearch:9200", "nats://indexer-nats:4222"),
+		"ws_config.yaml":                renderWSConfig(prepared, prepared.composeScyllaHosts, prepared.composePGDSN, "keydb:6379", "nats://nats:4222"),
+		"webhook_config.yaml":           renderWebhookConfig(prepared, prepared.composeScyllaHosts, "keydb:6379", "nats://nats:4222", "http://etcd:2379"),
 		"stream_config.yaml":            renderStreamConfig(prepared, "global", `https://stream-global.example.com`, prepared.appPublicURL, prepared.telemetryPublicURL),
 		"indexer_config.yaml":           renderIndexerConfig(prepared, "nats://indexer-nats:4222", "http://opensearch:9200"),
-		"embedder_config.yaml":          renderEmbedderConfig("scylla", "nats://nats:4222", "keydb:6379"),
+		"embedder_config.yaml":          renderEmbedderConfig(prepared.composeScyllaHosts, "nats://nats:4222", "keydb:6379"),
 		"telemetry_gateway_config.yaml": renderTelemetryGatewayConfig(prepared, "http://otel-collector:4318"),
 	}
 
 	helmValues := renderHelmValues(prepared, map[string]string{
-		"api":              renderAPIConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-nats:4222", "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
+		"api":              renderAPIConfig(prepared, prepared.helmScyllaHosts, prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-nats:4222", "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
 		"auth":             renderAuthConfig(prepared, prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN, "nats://"+prepared.helmFullName+"-nats:4222"),
-		"attachments":      renderAttachmentsConfig(prepared, prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN),
-		"search":           renderSearchConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-indexer-nats:4222"),
-		"ws":               renderWSConfig(prepared, prepared.helmFullName+"-scylla", prepared.yugabyteDSN, prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222"),
-		"webhook":          renderWebhookConfig(prepared, prepared.helmFullName+"-scylla", prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
+		"attachments":      renderAttachmentsConfig(prepared, prepared.helmScyllaHosts, "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN),
+		"search":           renderSearchConfig(prepared, prepared.helmScyllaHosts, prepared.helmFullName+"-keydb:6379", prepared.yugabyteDSN, "http://"+prepared.helmFullName+"-opensearch:9200", "nats://"+prepared.helmFullName+"-indexer-nats:4222"),
+		"ws":               renderWSConfig(prepared, prepared.helmScyllaHosts, prepared.yugabyteDSN, prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222"),
+		"webhook":          renderWebhookConfig(prepared, prepared.helmScyllaHosts, prepared.helmFullName+"-keydb:6379", "nats://"+prepared.helmFullName+"-nats:4222", "http://"+prepared.helmFullName+"-etcd:2379"),
 		"indexer":          renderIndexerConfig(prepared, "nats://"+prepared.helmFullName+"-indexer-nats:4222", "http://"+prepared.helmFullName+"-opensearch:9200"),
-		"embedder":         renderEmbedderConfig(prepared.helmFullName+"-scylla", "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379"),
+		"embedder":         renderEmbedderConfig(prepared.helmScyllaHosts, "nats://"+prepared.helmFullName+"-nats:4222", prepared.helmFullName+"-keydb:6379"),
 		"telemetryGateway": renderTelemetryGatewayConfig(prepared, "http://"+prepared.helmFullName+"-otel-collector:4318"),
 	})
 
@@ -62,7 +62,6 @@ func renderComposeEnv(prepared *preparedOptions) string {
 		"YUGABYTE_COLOCATION=false",
 		"YUGABYTE_ADDRESS=" + prepared.yugabyteAddress,
 		"PG_ADDRESS=" + prepared.yugabyteAddress,
-		"CITUS_ADDRESS=" + prepared.citusAddress,
 		"CASSANDRA_ADDRESS=" + prepared.composeCassandraAddr,
 		"",
 		"ETCD_ROOT_PASSWORD=" + prepared.EtcdRootPassword,
@@ -614,7 +613,7 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 		fmt.Sprintf("    tag: %q", prepared.MigrationsImageTag),
 		fmt.Sprintf("  yugabyteAddress: %q", prepared.yugabyteAddress),
 		fmt.Sprintf("  pgAddress: %q", prepared.yugabyteAddress),
-		fmt.Sprintf("  citusAddress: %q", prepared.citusAddress),
+		fmt.Sprintf("  cassandraAddress: %q", cassandraAddress(prepared.helmScyllaHosts, "gochat")),
 		"",
 		"relational:",
 		`  provider: "yugabyte"`,
@@ -633,11 +632,16 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 		`    repository: yugabytedb/yugabyte`,
 		`    tag: "2025.2.2.2-b11"`,
 		"",
-		"citus:",
-		fmt.Sprintf("  enabled: %s", boolText(prepared.legacyCitusEnabled)),
-		"  auth:",
-		fmt.Sprintf("    postgresPassword: %q", prepared.PostgresPassword),
-		"    hostAuthMethod: md5",
+		"scylla:",
+		"  enabled: false",
+		"  lifecycle:",
+		"    createKeyspace:",
+		"      enabled: true",
+		fmt.Sprintf("      host: %q", firstCSVValue(prepared.helmScyllaHosts)),
+		`      keyspace: "gochat"`,
+		`      replicationClass: "NetworkTopologyStrategy"`,
+		fmt.Sprintf("      datacenter: %q", prepared.ScyllaDatacenter),
+		fmt.Sprintf("      replicationFactor: %d", prepared.ScyllaReplicationFactor),
 		"",
 		"etcd:",
 		"  env:",
@@ -705,6 +709,135 @@ func renderHelmValues(prepared *preparedOptions, configs map[string]string) stri
 	)
 
 	return strings.Join(lines, "\n")
+}
+
+func renderScyllaValues(prepared *preparedOptions) string {
+	lines := []string{
+		fmt.Sprintf("fullnameOverride: %q", prepared.ScyllaReleaseName),
+		"",
+		"scyllaImage:",
+		"  repository: scylladb/scylla",
+		fmt.Sprintf("  tag: %q", prepared.ScyllaImageTag),
+		"agentImage:",
+		"  repository: scylladb/scylla-manager-agent",
+		"",
+		"developerMode: false",
+		"cpuset: true",
+		fmt.Sprintf("datacenter: %q", prepared.ScyllaDatacenter),
+		"",
+		"racks:",
+	}
+
+	for index, members := range scyllaRackMembers(prepared.ScyllaNodeCount) {
+		lines = append(lines,
+			fmt.Sprintf("  - name: rack%d", index+1),
+			fmt.Sprintf("    members: %d", members),
+			"    storage:",
+			fmt.Sprintf("      capacity: %s", prepared.ScyllaStorageSize),
+		)
+		if prepared.ScyllaStorageClass != "" {
+			lines = append(lines, fmt.Sprintf("      storageClassName: %s", prepared.ScyllaStorageClass))
+		}
+		lines = append(lines,
+			"    resources:",
+			"      limits:",
+			fmt.Sprintf("        cpu: %q", prepared.ScyllaCPU),
+			fmt.Sprintf("        memory: %s", prepared.ScyllaMemory),
+			"      requests:",
+			fmt.Sprintf("        cpu: %q", prepared.ScyllaCPU),
+			fmt.Sprintf("        memory: %s", prepared.ScyllaMemory),
+		)
+	}
+
+	lines = append(lines,
+		"",
+		"serviceMonitor:",
+		"  create: false",
+		"sysctls:",
+		"  - fs.aio-max-nr=30000000",
+		"  - fs.file-max=9223372036854775807",
+		"  - fs.nr_open=1073741816",
+		"  - fs.inotify.max_user_instances=1200",
+		"  - vm.swappiness=1",
+		"  - vm.vfs_cache_pressure=2000",
+	)
+
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func renderYugabyteValues(prepared *preparedOptions) string {
+	return strings.Join([]string{
+		"Image:",
+		"  repository: yugabytedb/yugabyte",
+		fmt.Sprintf("  tag: %q", prepared.YugabyteImageTag),
+		"  pullPolicy: IfNotPresent",
+		"",
+		"enableLoadBalancer: false",
+		"replicas:",
+		fmt.Sprintf("  master: %d", prepared.YugabyteReplicationFactor),
+		fmt.Sprintf("  tserver: %d", prepared.YugabyteTServerCount),
+		fmt.Sprintf("  totalMasters: %d", prepared.YugabyteReplicationFactor),
+		"",
+		"storage:",
+		"  ephemeral: false",
+		"  master:",
+		"    count: 1",
+		fmt.Sprintf("    size: %s", prepared.YugabyteMasterStorageSize),
+		fmt.Sprintf("    storageClass: %q", prepared.YugabyteStorageClass),
+		"  tserver:",
+		"    count: 1",
+		fmt.Sprintf("    size: %s", prepared.YugabyteTServerStorageSize),
+		fmt.Sprintf("    storageClass: %q", prepared.YugabyteStorageClass),
+		"",
+		"resource:",
+		"  master:",
+		"    limits:",
+		fmt.Sprintf("      memory: %s", prepared.YugabyteMasterMemory),
+		"    requests:",
+		fmt.Sprintf("      cpu: %q", prepared.YugabyteMasterCPU),
+		fmt.Sprintf("      memory: %s", prepared.YugabyteMasterMemory),
+		"  tserver:",
+		"    limits:",
+		fmt.Sprintf("      memory: %s", prepared.YugabyteTServerMemory),
+		"    requests:",
+		fmt.Sprintf("      cpu: %q", prepared.YugabyteTServerCPU),
+		fmt.Sprintf("      memory: %s", prepared.YugabyteTServerMemory),
+	}, "\n") + "\n"
+}
+
+func scyllaRackMembers(nodeCount int) []int {
+	if nodeCount <= 0 {
+		return nil
+	}
+	rackCount := nodeCount
+	if rackCount > 3 {
+		rackCount = 3
+	}
+	members := make([]int, rackCount)
+	for i := 0; i < nodeCount; i++ {
+		members[i%rackCount]++
+	}
+	return members
+}
+
+func firstCSVValue(value string) string {
+	for _, part := range strings.Split(value, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			return trimmed
+		}
+	}
+	return strings.TrimSpace(value)
+}
+
+func cassandraAddress(hosts, keyspace string) string {
+	host := firstCSVValue(hosts)
+	if host == "" {
+		return ""
+	}
+	if !strings.Contains(host, ":") {
+		host += ":9042"
+	}
+	return fmt.Sprintf("cassandra://%s/%s?x-multi-statement=true", host, strings.TrimPrefix(keyspace, "/"))
 }
 
 func renderHelmOtelEnvBlock(prepared *preparedOptions) string {

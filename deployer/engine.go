@@ -25,6 +25,32 @@ type Engine struct {
 	frontendRepo     gitHubRepo
 }
 
+const (
+	defaultScyllaNamespace         = "gochat-scylla"
+	defaultScyllaReleaseName       = "gochat-scylla"
+	defaultScyllaChartVersion      = "v1.21.0"
+	defaultScyllaImageTag          = "2026.1.3"
+	defaultScyllaNodeCount         = 3
+	defaultScyllaReplicationFactor = 3
+	defaultScyllaDatacenter        = "gochat-dc"
+	defaultScyllaStorageSize       = "50Gi"
+	defaultScyllaCPU               = "2"
+	defaultScyllaMemory            = "6Gi"
+
+	defaultYugabyteNamespace          = "gochat-yb"
+	defaultYugabyteReleaseName        = "yb"
+	defaultYugabyteChartVersion       = "2025.2.3"
+	defaultYugabyteImageTag           = "2025.2.3.0-b149"
+	defaultYugabyteTServerCount       = 3
+	defaultYugabyteReplicationFactor  = 3
+	defaultYugabyteMasterStorageSize  = "10Gi"
+	defaultYugabyteTServerStorageSize = "10Gi"
+	defaultYugabyteMasterCPU          = "500m"
+	defaultYugabyteMasterMemory       = "1Gi"
+	defaultYugabyteTServerCPU         = "2"
+	defaultYugabyteTServerMemory      = "2Gi"
+)
+
 type preparedOptions struct {
 	Options
 
@@ -53,9 +79,9 @@ type preparedOptions struct {
 	composePGDSN            string
 	yugabyteAddress         string
 	yugabyteDSN             string
-	citusAddress            string
-	legacyCitusEnabled      bool
 	composeCassandraAddr    string
+	composeScyllaHosts      string
+	helmScyllaHosts         string
 	openObserveRootEmail    string
 	openObserveRootPassword string
 	openObserveOrg          string
@@ -208,6 +234,8 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 	}
 
 	composeConfigs, helmValues := e.renderOutputs(prepared)
+	scyllaValues := renderScyllaValues(prepared)
+	yugabyteValues := renderYugabyteValues(prepared)
 	for name, content := range composeConfigs {
 		target := filepath.Join(composeConfigRoot, name)
 		if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
@@ -224,6 +252,14 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 	if err := os.WriteFile(helmValuesPath, []byte(helmValues), 0o644); err != nil {
 		return RenderResult{}, fmt.Errorf("write %s: %w", helmValuesPath, err)
 	}
+	scyllaValuesPath := filepath.Join(helmGeneratedRoot, "scylla-values.generated.yaml")
+	if err := os.WriteFile(scyllaValuesPath, []byte(scyllaValues), 0o644); err != nil {
+		return RenderResult{}, fmt.Errorf("write %s: %w", scyllaValuesPath, err)
+	}
+	yugabyteValuesPath := filepath.Join(helmGeneratedRoot, "yugabyte-values.generated.yaml")
+	if err := os.WriteFile(yugabyteValuesPath, []byte(yugabyteValues), 0o644); err != nil {
+		return RenderResult{}, fmt.Errorf("write %s: %w", yugabyteValuesPath, err)
+	}
 
 	if _, err := fmt.Fprintf(output, "[gochat] Rendered bundle into %s\n", prepared.WorkspaceRoot); err != nil {
 		return RenderResult{}, fmt.Errorf("write render result: %w", err)
@@ -237,6 +273,8 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 		ComposeFilePath:     filepath.Join(prepared.WorkspaceRoot, "compose", "docker-compose.yaml"),
 		HelmChartPath:       filepath.Join(prepared.WorkspaceRoot, "helm", "gochat"),
 		HelmValuesPath:      helmValuesPath,
+		ScyllaValuesPath:    scyllaValuesPath,
+		YugabyteValuesPath:  yugabyteValuesPath,
 		BackendTag:          prepared.backendTag,
 		FrontendTag:         prepared.frontendTag,
 		MigrationsTag:       prepared.MigrationsImageTag,
@@ -246,6 +284,9 @@ func (e *Engine) renderPrepared(ctx context.Context, prepared *preparedOptions, 
 		TelemetryGatewayURL: prepared.telemetryPublicURL,
 	}
 	result.ComposeDeployCommand = composeDeployCommand(prepared, result)
+	result.ScyllaOperatorDeployCommand = scyllaOperatorDeployCommand(prepared)
+	result.ScyllaDeployCommand = scyllaDeployCommand(prepared, result)
+	result.YugabyteDeployCommand = yugabyteDeployCommand(prepared, result)
 	result.HelmDeployCommand = helmDeployCommand(prepared, result)
 	result.InstructionsPath = deploymentGuidePath(prepared.WorkspaceRoot)
 
@@ -306,16 +347,17 @@ func (e *Engine) Deploy(ctx context.Context, opts Options, output io.Writer) (Re
 			return RenderResult{}, err
 		}
 	case DeploymentHelm:
-		args := []string{
-			"upgrade",
-			"--install",
-			prepared.ReleaseName,
-			result.HelmChartPath,
-			"--namespace", prepared.Namespace,
-			"--create-namespace",
-			"--values", result.HelmValuesPath,
+		helmEnv := helmCommandEnv(prepared.WorkspaceRoot)
+		if err := runCommand(ctx, prepared.WorkspaceRoot, helmEnv, output, "helm", scyllaOperatorDeployArgs(prepared)...); err != nil {
+			return RenderResult{}, err
 		}
-		if err := runCommand(ctx, prepared.WorkspaceRoot, helmCommandEnv(prepared.WorkspaceRoot), output, "helm", args...); err != nil {
+		if err := runCommand(ctx, prepared.WorkspaceRoot, helmEnv, output, "helm", scyllaDeployArgs(prepared, result)...); err != nil {
+			return RenderResult{}, err
+		}
+		if err := runCommand(ctx, prepared.WorkspaceRoot, helmEnv, output, "helm", yugabyteDeployArgs(prepared, result)...); err != nil {
+			return RenderResult{}, err
+		}
+		if err := runCommand(ctx, prepared.WorkspaceRoot, helmEnv, output, "helm", helmDeployArgs(prepared, result)...); err != nil {
 			return RenderResult{}, err
 		}
 	default:
@@ -437,9 +479,6 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	if opts.WebhookJWTSecret == "" {
 		opts.WebhookJWTSecret = randomSecret(48)
 	}
-	if opts.PostgresPassword == "" {
-		opts.PostgresPassword = randomSecret(32)
-	}
 	if opts.YugabytePort == 0 {
 		opts.YugabytePort = 5433
 	}
@@ -455,11 +494,105 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	if strings.TrimSpace(opts.YugabyteSSLMode) == "" {
 		opts.YugabyteSSLMode = "disable"
 	}
+	if strings.TrimSpace(opts.ScyllaNamespace) == "" {
+		opts.ScyllaNamespace = defaultScyllaNamespace
+	}
+	if strings.TrimSpace(opts.ScyllaReleaseName) == "" {
+		opts.ScyllaReleaseName = defaultScyllaReleaseName
+	}
+	if strings.TrimSpace(opts.ScyllaChartVersion) == "" {
+		opts.ScyllaChartVersion = defaultScyllaChartVersion
+	}
+	if strings.TrimSpace(opts.ScyllaImageTag) == "" {
+		opts.ScyllaImageTag = defaultScyllaImageTag
+	}
+	if opts.ScyllaNodeCount == 0 {
+		opts.ScyllaNodeCount = defaultScyllaNodeCount
+	}
+	if opts.ScyllaReplicationFactor == 0 {
+		opts.ScyllaReplicationFactor = defaultScyllaReplicationFactor
+	}
+	if strings.TrimSpace(opts.ScyllaDatacenter) == "" {
+		opts.ScyllaDatacenter = defaultScyllaDatacenter
+	}
+	if strings.TrimSpace(opts.ScyllaStorageSize) == "" {
+		opts.ScyllaStorageSize = defaultScyllaStorageSize
+	}
+	if strings.TrimSpace(opts.ScyllaCPU) == "" {
+		opts.ScyllaCPU = defaultScyllaCPU
+	}
+	if strings.TrimSpace(opts.ScyllaMemory) == "" {
+		opts.ScyllaMemory = defaultScyllaMemory
+	}
+	if opts.ScyllaNodeCount < 1 {
+		return nil, fmt.Errorf("scylla node count must be at least 1")
+	}
+	if opts.ScyllaReplicationFactor < 1 {
+		return nil, fmt.Errorf("scylla replication factor must be at least 1")
+	}
+	if opts.ScyllaReplicationFactor > opts.ScyllaNodeCount {
+		return nil, fmt.Errorf("scylla replication factor cannot exceed scylla node count")
+	}
+	if strings.TrimSpace(opts.YugabyteNamespace) == "" {
+		opts.YugabyteNamespace = defaultYugabyteNamespace
+	}
+	if strings.TrimSpace(opts.YugabyteReleaseName) == "" {
+		opts.YugabyteReleaseName = defaultYugabyteReleaseName
+	}
+	if strings.TrimSpace(opts.YugabyteChartVersion) == "" {
+		opts.YugabyteChartVersion = defaultYugabyteChartVersion
+	}
+	if strings.TrimSpace(opts.YugabyteImageTag) == "" {
+		opts.YugabyteImageTag = defaultYugabyteImageTag
+	}
+	if opts.YugabyteTServerCount == 0 {
+		opts.YugabyteTServerCount = defaultYugabyteTServerCount
+	}
+	if opts.YugabyteReplicationFactor == 0 {
+		opts.YugabyteReplicationFactor = defaultYugabyteReplicationFactor
+	}
+	if strings.TrimSpace(opts.YugabyteMasterStorageSize) == "" {
+		opts.YugabyteMasterStorageSize = defaultYugabyteMasterStorageSize
+	}
+	if strings.TrimSpace(opts.YugabyteTServerStorageSize) == "" {
+		opts.YugabyteTServerStorageSize = defaultYugabyteTServerStorageSize
+	}
+	if strings.TrimSpace(opts.YugabyteMasterCPU) == "" {
+		opts.YugabyteMasterCPU = defaultYugabyteMasterCPU
+	}
+	if strings.TrimSpace(opts.YugabyteMasterMemory) == "" {
+		opts.YugabyteMasterMemory = defaultYugabyteMasterMemory
+	}
+	if strings.TrimSpace(opts.YugabyteTServerCPU) == "" {
+		opts.YugabyteTServerCPU = defaultYugabyteTServerCPU
+	}
+	if strings.TrimSpace(opts.YugabyteTServerMemory) == "" {
+		opts.YugabyteTServerMemory = defaultYugabyteTServerMemory
+	}
+	if opts.YugabyteTServerCount < 1 {
+		return nil, fmt.Errorf("yugabyte tserver count must be at least 1")
+	}
+	if opts.YugabyteReplicationFactor < 1 {
+		return nil, fmt.Errorf("yugabyte replication factor must be at least 1")
+	}
+	if opts.YugabyteReplicationFactor > opts.YugabyteTServerCount {
+		return nil, fmt.Errorf("yugabyte replication factor cannot exceed yugabyte tserver count")
+	}
+	if opts.YugabyteReplicationFactor%2 == 0 {
+		return nil, fmt.Errorf("yugabyte replication factor must be odd")
+	}
 	if strings.TrimSpace(opts.YugabyteHost) == "" {
 		if opts.DeploymentType == DeploymentHelm {
-			opts.YugabyteHost = "yb-tservers.gochat-yb.svc.cluster.local"
+			opts.YugabyteHost = "yb-tservers." + opts.YugabyteNamespace + ".svc.cluster.local"
 		} else {
 			opts.YugabyteHost = "yugabyte"
+		}
+	}
+	if strings.TrimSpace(opts.ScyllaHosts) == "" {
+		if opts.DeploymentType == DeploymentHelm {
+			opts.ScyllaHosts = opts.ScyllaReleaseName + "-client." + opts.ScyllaNamespace + ".svc.cluster.local"
+		} else {
+			opts.ScyllaHosts = "scylla"
 		}
 	}
 	if opts.EtcdRootPassword == "" {
@@ -601,7 +734,6 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 		originFromURL(prepared.apiPublicBaseURL),
 	})
 	prepared.helmFullName = helmFullName(prepared.ReleaseName)
-	prepared.legacyCitusEnabled = !prepared.DisableLegacyCitus
 	prepared.backendTag = prepared.BackendTag
 	prepared.frontendTag = prepared.FrontendTag
 	prepared.imageAPI = imageRef(prepared.ImageRepositoryPrefix, "api", prepared.backendTag)
@@ -617,9 +749,10 @@ func (e *Engine) prepareOptions(ctx context.Context, opts Options) (*preparedOpt
 	prepared.imageMigrations = fmt.Sprintf("%s:%s", strings.TrimRight(prepared.MigrationsImageRepo, ":"), prepared.MigrationsImageTag)
 	prepared.yugabyteAddress = yugabyteURL(prepared.YugabyteUser, prepared.YugabytePassword, prepared.YugabyteHost, prepared.YugabytePort, prepared.YugabyteDatabase, prepared.YugabyteSSLMode)
 	prepared.yugabyteDSN = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s", prepared.YugabyteHost, prepared.YugabytePort, prepared.YugabyteUser, prepared.YugabytePassword, prepared.YugabyteDatabase, prepared.YugabyteSSLMode)
-	prepared.citusAddress = fmt.Sprintf("postgres://postgres:%s@citus-master:5432/gochat?sslmode=disable", prepared.PostgresPassword)
 	prepared.composePGAddr = prepared.yugabyteAddress
 	prepared.composeCassandraAddr = "cassandra://scylla:9042/gochat?x-multi-statement=true"
+	prepared.composeScyllaHosts = prepared.ScyllaHosts
+	prepared.helmScyllaHosts = prepared.ScyllaHosts
 	prepared.composePGDSN = prepared.yugabyteDSN
 	prepared.openObserveRootEmail = prepared.OpenObserveRootEmail
 	prepared.openObserveRootPassword = prepared.OpenObserveRootPassword
@@ -710,15 +843,87 @@ func composeDeployCommand(prepared *preparedOptions, result RenderResult) string
 }
 
 func helmDeployCommand(prepared *preparedOptions, result RenderResult) string {
-	args := []string{
-		"helm", "upgrade", "--install",
+	return strings.Join(append([]string{"helm"}, quoteArgs(helmDeployArgs(prepared, result))...), " ")
+}
+
+func scyllaOperatorDeployCommand(prepared *preparedOptions) string {
+	return strings.Join(append([]string{"helm"}, quoteArgs(scyllaOperatorDeployArgs(prepared))...), " ")
+}
+
+func scyllaDeployCommand(prepared *preparedOptions, result RenderResult) string {
+	return strings.Join(append([]string{"helm"}, quoteArgs(scyllaDeployArgs(prepared, result))...), " ")
+}
+
+func yugabyteDeployCommand(prepared *preparedOptions, result RenderResult) string {
+	return strings.Join(append([]string{"helm"}, quoteArgs(yugabyteDeployArgs(prepared, result))...), " ")
+}
+
+func helmDeployArgs(prepared *preparedOptions, result RenderResult) []string {
+	return []string{
+		"upgrade", "--install",
 		prepared.ReleaseName,
-		quoteCommandArg(result.HelmChartPath),
+		result.HelmChartPath,
 		"--namespace", prepared.Namespace,
 		"--create-namespace",
-		"--values", quoteCommandArg(result.HelmValuesPath),
+		"--values", result.HelmValuesPath,
+		"--reset-values",
 	}
-	return strings.Join(args, " ")
+}
+
+func scyllaOperatorDeployArgs(prepared *preparedOptions) []string {
+	return []string{
+		"upgrade", "--install",
+		"scylla-operator",
+		"scylla/scylla-operator",
+		"--namespace", "scylla-operator",
+		"--create-namespace",
+		"--version", prepared.ScyllaChartVersion,
+		"--reset-values",
+		"--wait",
+		"--timeout", "10m",
+	}
+}
+
+func scyllaDeployArgs(prepared *preparedOptions, result RenderResult) []string {
+	return []string{
+		"upgrade", "--install",
+		prepared.ScyllaReleaseName,
+		"scylla/scylla",
+		"--namespace", prepared.ScyllaNamespace,
+		"--create-namespace",
+		"--version", prepared.ScyllaChartVersion,
+		"--values", result.ScyllaValuesPath,
+		"--reset-values",
+		"--wait",
+		"--timeout", "20m",
+	}
+}
+
+func yugabyteDeployArgs(prepared *preparedOptions, result RenderResult) []string {
+	return []string{
+		"upgrade", "--install",
+		prepared.YugabyteReleaseName,
+		"yugabytedb/yugabyte",
+		"--namespace", prepared.YugabyteNamespace,
+		"--create-namespace",
+		"--version", prepared.YugabyteChartVersion,
+		"--values", result.YugabyteValuesPath,
+		"--reset-values",
+		"--wait",
+		"--timeout", "20m",
+	}
+}
+
+func quoteArgs(args []string) []string {
+	quoted := make([]string, 0, len(args))
+	for _, arg := range args {
+		if strings.ContainsAny(arg, " \t\"") {
+			quoted = append(quoted, quoteCommandArg(arg))
+			continue
+		}
+		quoted = append(quoted, arg)
+	}
+	return quoted
 }
 
 func quoteCommandArg(value string) string {

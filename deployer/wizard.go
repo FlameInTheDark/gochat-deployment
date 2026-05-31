@@ -331,6 +331,8 @@ func reviewText(prepared *preparedOptions, report CheckReport) string {
 		fmt.Sprintf("API: %s", prepared.apiPublicBaseURL),
 		fmt.Sprintf("WebSocket: %s", prepared.wsPublicURL),
 		fmt.Sprintf("Telemetry: %s", prepared.telemetryPublicURL),
+		fmt.Sprintf("ScyllaDB: %d nodes, RF=%d", prepared.ScyllaNodeCount, prepared.ScyllaReplicationFactor),
+		fmt.Sprintf("YugabyteDB: %d tservers, RF=%d", prepared.YugabyteTServerCount, prepared.YugabyteReplicationFactor),
 		fmt.Sprintf("Email Provider: %s", prepared.EmailProvider),
 	}
 	if prepared.storagePublicBaseURL != "" {

@@ -74,21 +74,44 @@ type Options struct {
 	UseTLS                ToggleMode
 	UseBundledTraefik     ToggleMode
 
-	AuthSecret              string
-	MFAEncryptionKey        string
-	WebhookJWTSecret        string
-	PostgresPassword        string
-	YugabyteHost            string
-	YugabytePort            int
-	YugabyteUser            string
-	YugabytePassword        string
-	YugabyteDatabase        string
-	YugabyteSSLMode         string
-	DisableLegacyCitus      bool
-	EtcdRootPassword        string
-	OpensearchAdminPassword string
-	OpenObserveRootEmail    string
-	OpenObserveRootPassword string
+	AuthSecret                 string
+	MFAEncryptionKey           string
+	WebhookJWTSecret           string
+	YugabyteHost               string
+	YugabytePort               int
+	YugabyteUser               string
+	YugabytePassword           string
+	YugabyteDatabase           string
+	YugabyteSSLMode            string
+	YugabyteNamespace          string
+	YugabyteReleaseName        string
+	YugabyteChartVersion       string
+	YugabyteImageTag           string
+	YugabyteTServerCount       int
+	YugabyteReplicationFactor  int
+	YugabyteStorageClass       string
+	YugabyteMasterStorageSize  string
+	YugabyteTServerStorageSize string
+	YugabyteMasterCPU          string
+	YugabyteMasterMemory       string
+	YugabyteTServerCPU         string
+	YugabyteTServerMemory      string
+	ScyllaHosts                string
+	ScyllaNamespace            string
+	ScyllaReleaseName          string
+	ScyllaChartVersion         string
+	ScyllaImageTag             string
+	ScyllaNodeCount            int
+	ScyllaReplicationFactor    int
+	ScyllaDatacenter           string
+	ScyllaStorageClass         string
+	ScyllaStorageSize          string
+	ScyllaCPU                  string
+	ScyllaMemory               string
+	EtcdRootPassword           string
+	OpensearchAdminPassword    string
+	OpenObserveRootEmail       string
+	OpenObserveRootPassword    string
 
 	StorageBucket             string
 	MinIORootUser             string
@@ -136,26 +159,31 @@ func (r CheckReport) MissingRequired() []ToolStatus {
 }
 
 type RenderResult struct {
-	WorkspaceRoot        string
-	GeneratedRoot        string
-	ComposeEnvPath       string
-	ComposeConfigRoot    string
-	ComposeFilePath      string
-	HelmChartPath        string
-	HelmValuesPath       string
-	ComposeDeployCommand string
-	HelmDeployCommand    string
-	InstructionsPath     string
-	BackendTag           string
-	FrontendTag          string
-	MigrationsTag        string
-	AppPublicURL         string
-	APIPublicBaseURL     string
-	WSPublicURL          string
-	TelemetryGatewayURL  string
-	StoragePublicURL     string
-	MinIOConsoleURL      string
-	OpenObserveURL       string
+	WorkspaceRoot               string
+	GeneratedRoot               string
+	ComposeEnvPath              string
+	ComposeConfigRoot           string
+	ComposeFilePath             string
+	HelmChartPath               string
+	HelmValuesPath              string
+	ScyllaValuesPath            string
+	YugabyteValuesPath          string
+	ComposeDeployCommand        string
+	ScyllaOperatorDeployCommand string
+	ScyllaDeployCommand         string
+	YugabyteDeployCommand       string
+	HelmDeployCommand           string
+	InstructionsPath            string
+	BackendTag                  string
+	FrontendTag                 string
+	MigrationsTag               string
+	AppPublicURL                string
+	APIPublicBaseURL            string
+	WSPublicURL                 string
+	TelemetryGatewayURL         string
+	StoragePublicURL            string
+	MinIOConsoleURL             string
+	OpenObserveURL              string
 }
 
 func (r RenderResult) SummaryLines() []string {
@@ -179,6 +207,12 @@ func (r RenderResult) SummaryLines() []string {
 	}
 	if r.OpenObserveURL != "" {
 		lines = append(lines, fmt.Sprintf("Observe:   %s", r.OpenObserveURL))
+	}
+	if r.ScyllaValuesPath != "" {
+		lines = append(lines, fmt.Sprintf("Scylla:    %s", r.ScyllaValuesPath))
+	}
+	if r.YugabyteValuesPath != "" {
+		lines = append(lines, fmt.Sprintf("Yugabyte:  %s", r.YugabyteValuesPath))
 	}
 	if r.InstructionsPath != "" {
 		lines = append(lines, fmt.Sprintf("Guide:     %s", r.InstructionsPath))

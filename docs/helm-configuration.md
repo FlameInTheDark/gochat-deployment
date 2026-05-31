@@ -6,7 +6,7 @@ For Kubernetes deployments, run:
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1 -DeploymentType helm
 ```
 
-The wrapper generates `.generated/helm/values.generated.yaml` and installs the chart from [helm/gochat](/H:/Projects/Deployment/gochat-deployment/helm/gochat).
+The wrapper generates `.generated/helm/values.generated.yaml`, `.generated/helm/scylla-values.generated.yaml`, and `.generated/helm/yugabyte-values.generated.yaml`, then installs the database charts and the GoChat chart from [helm/gochat](/H:/Projects/Deployment/gochat-deployment/helm/gochat).
 
 ## Required Operator Inputs
 
@@ -17,11 +17,16 @@ The wrapper generates `.generated/helm/values.generated.yaml` and installs the c
 - ingress controller strategy:
   - existing ingress controller
   - bundled Traefik
+- ScyllaDB and YugabyteDB namespaces, release names, node counts, replication factors, storage, and resources
 - YugabyteDB YSQL service host, port, user, password, database, and sslmode
 
 ## YugabyteDB YSQL
 
-GoChat now uses YugabyteDB YSQL as the active relational store. Install YugabyteDB with the official YugabyteDB Helm chart before applying this chart. The default GoChat values expect a YugabyteDB release named `yb` in namespace `gochat-yb`, which exposes YSQL through `yb-tservers.gochat-yb.svc.cluster.local:5433`.
+GoChat uses YugabyteDB YSQL as the active relational store. The deployer renders values for the official YugabyteDB Helm chart before applying the GoChat chart. The default GoChat values expect a YugabyteDB release named `yb` in namespace `gochat-yb`, which exposes YSQL through `yb-tservers.gochat-yb.svc.cluster.local:5433`.
+
+## ScyllaDB
+
+The deployer renders values for the Scylla Operator chart and the ScyllaDB cluster chart. Defaults match a 3-node ScyllaDB cluster in namespace `gochat-scylla`, exposed through `gochat-scylla-client.gochat-scylla.svc.cluster.local`. The GoChat chart includes a keyspace hook that uses `NetworkTopologyStrategy` with the configured datacenter and replication factor.
 
 For extreme highload, keep `relational.yugabyte.colocation=false`. This creates a non-colocated database so large guild, channel, membership, invite, and role tables can split and rebalance across tablets and nodes instead of being pinned into one colocated tablet.
 
@@ -32,8 +37,6 @@ The GoChat chart includes a `yugabyte-init` Helm hook that:
 - uses `CREATE DATABASE ... WITH COLOCATION = false`,
 - reports existing database colocation state,
 - never drops or recreates an existing database.
-
-Legacy Citus templates remain enabled by default as migration source material. Disable them only after Voyager export/import, `gctools yugabyte verify`, schema version checks, and smoke tests pass.
 
 ## Storage Notes
 
@@ -78,7 +81,8 @@ The generated override file pins:
 - rendered config blocks for API/auth/attachments/ws/webhook/indexer/embedder
 - a generated `.generated/compose/config/stream_config.yaml` starter file for the first external stream node, with `dave_allow_av1: false` by default for DAVE-encrypted stream compatibility
 - rendered telemetry gateway image, config, and ingress host
-- YugabyteDB YSQL, preserved legacy Citus, etcd, and OpenSearch secrets
+- YugabyteDB YSQL, ScyllaDB contact points, etcd, and OpenSearch secrets
+- ScyllaDB keyspace creation with explicit datacenter and replication factor
 - ingress host rules for app, storage, and MinIO console
 - MinIO credentials and bucket settings when enabled
 

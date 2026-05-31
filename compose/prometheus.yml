@@ -76,16 +76,6 @@ scrape_configs:
     static_configs:
       - targets: ["host.docker.internal:9323"]
 
-  - job_name: postgres-citus-master
-    static_configs:
-      - targets:
-          - postgres-exporter-master:9187
-
-  - job_name: postgres-citus-worker
-    static_configs:
-      - targets:
-          - postgres-exporter-worker:9187
-
 storage:
   tsdb:
     out_of_order_time_window: 30m

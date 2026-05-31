@@ -78,7 +78,7 @@ gochat-deployer render \
   --external-s3-secret-access-key SECRET_KEY
 ```
 
-`render` prints the exact `docker compose` and `helm upgrade --install` commands that can be run against the generated workspace.
+`render` prints the exact `docker compose` and `helm upgrade --install` commands that can be run against the generated workspace, including the ScyllaDB and YugabyteDB Helm commands for Kubernetes.
 It also writes `.generated/deployment-guide.md`, a Markdown handoff file with URLs, commands, credentials, and standalone SFU/stream deployment sections for the rendered deployment.
 
 ### `gochat-deployer deploy`
@@ -180,8 +180,7 @@ If `--migrations-image-tag` is omitted, the deployer matches the migrations imag
 - `--yugabyte-password VALUE`
 - `--yugabyte-database VALUE`
 - `--yugabyte-sslmode VALUE`
-- `--postgres-password VALUE` for preserved legacy Citus only
-- `--disable-legacy-citus` after verified cutover only
+- `--scylla-hosts HOSTS` for ScyllaDB contact points
 - `--etcd-root-password VALUE`
 - `--opensearch-admin-password VALUE`
 - `--openobserve-root-email VALUE`
@@ -191,7 +190,36 @@ OpenObserve admin email and password must be supplied explicitly for `render` an
 If `--mfa-encryption-key` is omitted, the deployer generates a base64-encoded 32-byte key and writes it into the rendered auth config plus deployment guide.
 The shared `--auth-secret` signs and validates both voice and stream media JWTs. External stream starter configs render this same value as `auth_secret`; webhook service tokens are still generated separately from `--webhook-jwt-secret`.
 
-YugabyteDB is the active relational store. Compose defaults to `yugabyte:5433`; Helm defaults to `yb-tservers.gochat-yb.svc.cluster.local:5433`, matching a YugabyteDB release named `yb` in namespace `gochat-yb`. Keep legacy Citus enabled until Voyager export/import, row-count/checksum verification, schema version checks, and application smoke tests pass.
+YugabyteDB is the active relational store. Compose defaults to `yugabyte:5433`; Helm defaults to `yb-tservers.gochat-yb.svc.cluster.local:5433`, matching a YugabyteDB release named `yb` in namespace `gochat-yb`. Helm also defaults ScyllaDB contact points to the operator-managed service `gochat-scylla-client.gochat-scylla.svc.cluster.local`.
+
+### Kubernetes Database Topology
+
+- `--scylla-namespace NAME`
+- `--scylla-release-name NAME`
+- `--scylla-chart-version VERSION`
+- `--scylla-image-tag TAG`
+- `--scylla-node-count COUNT`
+- `--scylla-replication-factor COUNT`
+- `--scylla-datacenter NAME`
+- `--scylla-storage-class NAME`
+- `--scylla-storage-size SIZE`
+- `--scylla-cpu CPU`
+- `--scylla-memory MEMORY`
+- `--yugabyte-namespace NAME`
+- `--yugabyte-release-name NAME`
+- `--yugabyte-chart-version VERSION`
+- `--yugabyte-image-tag TAG`
+- `--yugabyte-tserver-count COUNT`
+- `--yugabyte-replication-factor COUNT`
+- `--yugabyte-storage-class NAME`
+- `--yugabyte-master-storage-size SIZE`
+- `--yugabyte-tserver-storage-size SIZE`
+- `--yugabyte-master-cpu CPU`
+- `--yugabyte-master-memory MEMORY`
+- `--yugabyte-tserver-cpu CPU`
+- `--yugabyte-tserver-memory MEMORY`
+
+For Helm, the deployer writes `.generated/helm/scylla-values.generated.yaml` and `.generated/helm/yugabyte-values.generated.yaml`. ScyllaDB defaults to 3 nodes and keyspace RF 3 using `NetworkTopologyStrategy`; YugabyteDB defaults to 3 tservers and RF 3, with the official chart's master count tied to the replication factor.
 
 ## Compose Target
 
@@ -200,7 +228,7 @@ YugabyteDB is the active relational store. Compose defaults to `yugabyte:5433`; 
 - `docker`
 
 Compose always uses bundled Traefik and HTTP public URLs.
-Compose starts YugabyteDB with persistent `yugabyte-data` storage and creates the `gochat` database idempotently with `COLOCATION=false`. Legacy Citus remains available with `docker compose --profile legacy-citus ...`; do not remove the `citus-data` volume during migration.
+Compose starts YugabyteDB with persistent `yugabyte-data` storage and creates the `gochat` database idempotently with `COLOCATION=false`.
 
 ## Helm Target
 
@@ -225,7 +253,7 @@ Optional:
 - `kubectl`
 
 Helm defaults to TLS-aware public URLs, bundled OpenObserve/OTEL, and an in-cluster UI build from the frontend repo tag.
-Install YugabyteDB separately with the official YugabyteDB Helm chart, then point `--yugabyte-host`, `--yugabyte-port`, `--yugabyte-user`, and `--yugabyte-password` at the YSQL service. The GoChat chart only creates/checks the target database and never drops or recreates it.
+For Helm deploys, the deployer applies the Scylla Operator, ScyllaDB, YugabyteDB, and GoChat app charts in that order. The GoChat chart creates/checks the target YugabyteDB database and ScyllaDB keyspace, and never drops or recreates an existing database.
 
 If `--ingress-class-name` is set and `--bundled-traefik` is not forced on, the deployer auto-disables bundled Traefik and renders the separate websocket ingresses needed for ingress-nginx style clusters.
 

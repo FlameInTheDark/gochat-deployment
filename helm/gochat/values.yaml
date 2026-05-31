@@ -33,7 +33,7 @@ yugabyteInit:
   affinity: {}
 
 scylla:
-  enabled: true
+  enabled: false
   replicaCount: 1
   image:
     repository: scylladb/scylla
@@ -60,8 +60,10 @@ scylla:
   lifecycle:
     createKeyspace:
       enabled: true
+      host: ""
       keyspace: gochat
       replicationClass: SimpleStrategy
+      datacenter: gochat-dc
       replicationFactor: 1
 
 nats:
@@ -606,7 +608,7 @@ api:
     auth_secret: "change_me_before_use_it_in_production"
 
     # Cassandra
-    cluster: ["gochat-scylla"]
+    cluster: ["gochat-scylla-client.gochat-scylla.svc.cluster.local"]
     cluster_keyspace: "gochat"
 
     # Redis
@@ -673,7 +675,7 @@ search:
     auth_secret: "change_me_before_use_it_in_production"
 
     # Cassandra
-    cluster: ["gochat-scylla"]
+    cluster: ["gochat-scylla-client.gochat-scylla.svc.cluster.local"]
     cluster_keyspace: "gochat"
 
     # Redis
@@ -712,7 +714,7 @@ ws:
     auth_secret: "change_me_before_use_it_in_production"
 
     # Cassandra
-    cluster: ["gochat-scylla"]
+    cluster: ["gochat-scylla-client.gochat-scylla.svc.cluster.local"]
     cluster_keyspace: "gochat"
 
     # YugabyteDB YSQL
@@ -757,7 +759,7 @@ embedder:
   env: []
   config: |
     # Cassandra
-    cluster: ["gochat-scylla"]
+    cluster: ["gochat-scylla-client.gochat-scylla.svc.cluster.local"]
     cluster_keyspace: "gochat"
 
     # NATS
@@ -799,7 +801,7 @@ attachments:
     auth_secret: "change_me_before_use_it_in_production"
 
     # Cassandra
-    cluster: ["gochat-scylla"]
+    cluster: ["gochat-scylla-client.gochat-scylla.svc.cluster.local"]
     cluster_keyspace: "gochat"
 
     # NATS
@@ -850,7 +852,7 @@ webhook:
     etcd_password: "changeme"
 
     # Cassandra (for attachment finalization)
-    cluster: ["gochat-scylla"]
+    cluster: ["gochat-scylla-client.gochat-scylla.svc.cluster.local"]
     cluster_keyspace: "gochat"
 
     # Webhook JWT secret (HS256). Tokens include {"typ":"<service>", "id":"<uuid>"}.
@@ -985,7 +987,6 @@ migrations:
     pullPolicy: IfNotPresent
   yugabyteAddress: ""
   pgAddress: ""
-  citusAddress: ""
   cassandraAddress: ""
   backoffLimit: 5
   resources: {}
@@ -1059,49 +1060,6 @@ traefik:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
-citus:
-  # Legacy source database. Keep enabled through the Citus -> YugabyteDB cutover
-  # window; disable only after export, import, verification, and smoke tests pass.
-  enabled: true
-  image:
-    repository: citusdata/citus
-    tag: "13.0.3"
-    pullPolicy: IfNotPresent
-  auth:
-    postgresUser: postgres
-    postgresPassword: postgres
-    postgresDb: gochat
-    hostAuthMethod: md5
-  master:
-    persistence:
-      enabled: true
-      storageClass: ""
-      accessModes:
-        - ReadWriteOnce
-      size: 20Gi
-    service:
-      type: ClusterIP
-      port: 5432
-    resources: {}
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
-  worker:
-    enabled: false
-    replicaCount: 1
-    resources: {}
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
-  manager:
-    enabled: false
-    resources: {}
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
-    extraVolumeMounts: []
-    extraVolumes: []
 
 serviceAccount:
   create: true

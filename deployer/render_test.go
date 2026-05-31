@@ -45,10 +45,65 @@ func TestRenderHelmValuesIncludesFrontendURLs(t *testing.T) {
 		"relational:\n  provider: \"yugabyte\"\n  yugabyte:\n    host: \"yb-tservers.gochat-yb.svc.cluster.local\"\n    port: 5433",
 		"    colocation: false",
 		"yugabyteInit:\n  enabled: true\n  image:\n    repository: yugabytedb/yugabyte\n    tag: \"2025.2.2.2-b11\"",
-		"citus:\n  enabled: true\n  auth:",
+		"scylla:\n  enabled: false",
+		"      host: \"gochat-scylla-client.gochat-scylla.svc.cluster.local\"",
+		"      replicationClass: \"NetworkTopologyStrategy\"",
+		"      datacenter: \"gochat-dc\"",
+		"      replicationFactor: 3",
+		"  cassandraAddress: \"cassandra://gochat-scylla-client.gochat-scylla.svc.cluster.local:9042/gochat?x-multi-statement=true\"",
 	} {
 		if !strings.Contains(values, expected) {
 			t.Fatalf("rendered values missing %q", expected)
+		}
+	}
+}
+
+func TestRenderDatabaseChartValuesIncludeTopology(t *testing.T) {
+	engine := NewEngine(nil)
+
+	prepared, err := engine.prepareOptions(context.Background(), withTestOpenObserve(Options{
+		DeploymentType:             DeploymentHelm,
+		StorageMode:                StorageMinIO,
+		BaseDomain:                 "example.com",
+		BackendTag:                 "v1.2.3",
+		FrontendTag:                "v2.3.4",
+		ScyllaNodeCount:            5,
+		ScyllaReplicationFactor:    3,
+		YugabyteTServerCount:       5,
+		YugabyteReplicationFactor:  3,
+		YugabyteTServerStorageSize: "20Gi",
+	}))
+	if err != nil {
+		t.Fatalf("prepareOptions returned error: %v", err)
+	}
+
+	scyllaValues := renderScyllaValues(prepared)
+	for _, expected := range []string{
+		`fullnameOverride: "gochat-scylla"`,
+		`datacenter: "gochat-dc"`,
+		`  - name: rack1`,
+		`    members: 2`,
+		`  - name: rack2`,
+		`    members: 2`,
+		`  - name: rack3`,
+		`    members: 1`,
+		`      capacity: 50Gi`,
+	} {
+		if !strings.Contains(scyllaValues, expected) {
+			t.Fatalf("rendered scylla values missing %q", expected)
+		}
+	}
+
+	yugabyteValues := renderYugabyteValues(prepared)
+	for _, expected := range []string{
+		`  tag: "2025.2.3.0-b149"`,
+		"replicas:\n  master: 3\n  tserver: 5\n  totalMasters: 3",
+		`    size: 20Gi`,
+		`      cpu: "2"`,
+		`      memory: 2Gi`,
+	} {
+		if !strings.Contains(yugabyteValues, expected) {
+			t.Fatalf("rendered yugabyte values missing %q", expected)
 		}
 	}
 }
@@ -285,7 +340,7 @@ func TestRenderComposeEnvIncludesObservabilityValues(t *testing.T) {
 		"YUGABYTE_COLOCATION=false",
 		"YUGABYTE_ADDRESS=postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable",
 		"PG_ADDRESS=postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable",
-		"CITUS_ADDRESS=postgres://postgres:",
+		"CASSANDRA_ADDRESS=cassandra://scylla:9042/gochat?x-multi-statement=true",
 	} {
 		if !strings.Contains(env, expected) {
 			t.Fatalf("rendered compose env missing %q", expected)

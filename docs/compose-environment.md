@@ -7,7 +7,7 @@ The main operator inputs are:
 - deployment type: `compose`
 - storage mode: `minio` or `external`
 - base domain or explicit public hosts
-- secrets for auth, webhook JWT, YugabyteDB YSQL, preserved legacy Citus, etcd, and OpenSearch
+- secrets for auth, webhook JWT, YugabyteDB YSQL, etcd, and OpenSearch
 - external S3 endpoint and credentials when `external` storage is selected
 - image repository prefix and tag when you want something other than `ghcr.io/flameinthedark:*`
 
@@ -65,17 +65,11 @@ Application containers default to the upstream GHCR images:
 - `ghcr.io/flameinthedark/gochat-embedder`
 - `ghcr.io/flameinthedark/gochat-react`
 
-Database migrations run from the pulled `ghcr.io/<owner>/gochat-migrations:<backend-tag>` image by default. The generated env file provides `MIGRATION_SCOPE=all`, `YUGABYTE_ADDRESS`, `PG_ADDRESS`, `CITUS_ADDRESS`, and `CASSANDRA_ADDRESS`; `PG_ADDRESS` points to YugabyteDB YSQL.
+Database migrations run from the pulled `ghcr.io/<owner>/gochat-migrations:<backend-tag>` image by default. The generated env file provides `MIGRATION_SCOPE=all`, `YUGABYTE_ADDRESS`, `PG_ADDRESS`, and `CASSANDRA_ADDRESS`; `PG_ADDRESS` points to YugabyteDB YSQL.
 
 The Compose stack starts `yugabytedb/yugabyte:2025.2.2.2-b11`, exposes YSQL on `${YUGABYTE_YSQL_PORT:-5433}`, exposes the YugabyteDB UI on `${YUGABYTE_UI_PORT:-15433}`, and persists data in the `yugabyte-data` volume. The `yugabyte-init` service creates `gochat` idempotently with `COLOCATION=false` and leaves any existing database untouched.
 
-Legacy Citus remains in the Compose file behind the explicit `legacy-citus` profile for source export and rollback reference:
-
-```bash
-docker compose --profile legacy-citus up -d citus-master citus-init
-```
-
-Do not remove `citus-data` or `yugabyte-data` during migration. Data deletion is a release blocker.
+Do not remove `yugabyte-data` during normal operation. Data deletion is a release blocker.
 
 The Compose stack also publishes OpenSearch Dashboards on `http://<host>:5601` by default. Override that with `OPENSEARCH_DASHBOARDS_PORT` in the generated env file if needed.
 

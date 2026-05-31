@@ -242,7 +242,6 @@ services:
       MIGRATION_SCOPE: ${MIGRATION_SCOPE:-all}
       YUGABYTE_ADDRESS: ${YUGABYTE_ADDRESS:-postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable}
       PG_ADDRESS: ${PG_ADDRESS:-postgres://yugabyte:yugabyte@yugabyte:5433/gochat?sslmode=disable}
-      CITUS_ADDRESS: ${CITUS_ADDRESS:-postgres://postgres:postgres@citus-master:5432/gochat?sslmode=disable}
       CASSANDRA_ADDRESS: ${CASSANDRA_ADDRESS:-cassandra://scylla:9042/gochat?x-multi-statement=true}
     depends_on:
       yugabyte-init:
@@ -337,38 +336,6 @@ services:
         fi
 
         /home/yugabyte/bin/ysqlsh -h "$$YUGABYTE_HOST" -p "$$YUGABYTE_PORT" -U "$$YUGABYTE_USER" -d yugabyte -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$$YUGABYTE_DB\" WITH COLOCATION = $$colocation;"
-
-  citus-master:
-    image: ${CITUS_IMAGE:-citusdata/citus:13.0.3}
-    profiles: ["legacy-citus"]
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-gochat}
-      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-md5}
-    volumes:
-      - citus-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gochat} --quiet"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
-  citus-init:
-    image: ${POSTGRES_CLIENT_IMAGE:-postgres:15-alpine}
-    profiles: ["legacy-citus"]
-    restart: "no"
-    depends_on:
-      citus-master:
-        condition: service_healthy
-    environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        psql -h citus-master -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gochat} -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS citus;'
 
   opensearch:
     image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:2.13.0}
@@ -521,7 +488,6 @@ services:
         mc cors set local/$$MINIO_BUCKET /tmp/cors.xml
 
 volumes:
-  citus-data:
   yugabyte-data:
   minio-data:
   openobserve-data:

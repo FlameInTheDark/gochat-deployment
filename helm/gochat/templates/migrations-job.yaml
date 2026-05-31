@@ -1,13 +1,20 @@
 {{- if .Values.migrations.enabled }}
 {{- $yb := .Values.relational.yugabyte -}}
 {{- $defaultYugabyte := printf "postgres://%s:%s@%s:%v/%s?sslmode=%s" $yb.user $yb.password $yb.host (int $yb.port) $yb.database $yb.sslMode -}}
-{{- $defaultPg := "" -}}
-{{- if .Values.citus.enabled -}}
-  {{- $defaultPg = printf "postgres://%s:%s@%s-citus-master:%v/%s?sslmode=disable" .Values.citus.auth.postgresUser .Values.citus.auth.postgresPassword (include "gochat.fullname" .) (int .Values.citus.master.service.port) .Values.citus.auth.postgresDb -}}
-{{- end -}}
 {{- $defaultCassandra := "" -}}
+{{- $defaultCassandraHost := "" -}}
 {{- if .Values.scylla.enabled -}}
-  {{- $defaultCassandra = printf "cassandra://%s-scylla:%v/%s?x-multi-statement=true" (include "gochat.fullname" .) (int .Values.scylla.service.ports.cql) .Values.scylla.lifecycle.createKeyspace.keyspace -}}
+  {{- $defaultCassandraHost = printf "%s-scylla:%v" (include "gochat.fullname" .) (int .Values.scylla.service.ports.cql) -}}
+{{- else if .Values.scylla.lifecycle.createKeyspace.host -}}
+  {{- $externalCassandraHost := .Values.scylla.lifecycle.createKeyspace.host -}}
+  {{- if contains ":" $externalCassandraHost -}}
+    {{- $defaultCassandraHost = $externalCassandraHost -}}
+  {{- else -}}
+    {{- $defaultCassandraHost = printf "%s:%v" $externalCassandraHost (int .Values.scylla.service.ports.cql) -}}
+  {{- end -}}
+{{- end -}}
+{{- if $defaultCassandraHost -}}
+  {{- $defaultCassandra = printf "cassandra://%s/%s?x-multi-statement=true" $defaultCassandraHost .Values.scylla.lifecycle.createKeyspace.keyspace -}}
 {{- end -}}
 apiVersion: batch/v1
 kind: Job
@@ -42,8 +49,6 @@ spec:
               value: {{ default $defaultYugabyte .Values.migrations.yugabyteAddress | quote }}
             - name: PG_ADDRESS
               value: {{ default $defaultYugabyte .Values.migrations.pgAddress | quote }}
-            - name: CITUS_ADDRESS
-              value: {{ default $defaultPg .Values.migrations.citusAddress | quote }}
             - name: CASSANDRA_ADDRESS
               value: {{ default $defaultCassandra .Values.migrations.cassandraAddress | quote }}
           resources:

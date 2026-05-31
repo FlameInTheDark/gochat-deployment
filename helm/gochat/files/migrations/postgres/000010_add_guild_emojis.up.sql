@@ -24,7 +24,6 @@ BEGIN
     $sql$;
     EXECUTE 'CREATE INDEX idx_guild_emojis_id ON guild_emojis (id)';
     EXECUTE 'CREATE UNIQUE INDEX idx_guild_emojis_unique_name ON guild_emojis (guild_id, name_normalized)';
-    PERFORM create_distributed_table('guild_emojis', 'guild_id', colocate_with => 'guilds');
 
     EXECUTE $sql$
     CREATE TABLE emoji_lookup
@@ -41,7 +40,6 @@ BEGIN
     )
     $sql$;
     EXECUTE 'CREATE INDEX idx_emoji_lookup_guild_id ON emoji_lookup (guild_id)';
-    PERFORM create_distributed_table('emoji_lookup', 'id');
 END
 $$;
 -- +migrate StatementEnd
